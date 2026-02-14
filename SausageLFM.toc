@@ -1,0 +1,10 @@
+## Interface: 30300
+## Title: |cffffd200Sausage|rLFM
+## Notes: Smart LFM & Raid Management Tool for Warmane.
+## Author: Sausage Party / Kokotiar
+## Version: 1.0.2
+## SavedVariables: SausageLFM_DB
+## SavedVariablesPerCharacter: SausageLFM_CharDB
+
+SausageLFM.lua
+SausageLFM_UI.lua
