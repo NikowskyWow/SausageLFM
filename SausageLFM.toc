@@ -1,6 +1,6 @@
 ## Interface: 30300
 ## Title: |cffffd200Sausage|rLFM
-## Notes: Smart LFM & Raid Management Tool for Warmane.
+## Notes: Smart LFM tool with auto-raid scanning and candidate queue.
 ## Author: Sausage Party / Kokotiar
 ## Version: 1.0.2
 ## SavedVariables: SausageLFM_DB
