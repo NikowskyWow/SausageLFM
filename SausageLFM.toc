@@ -1,10 +1,9 @@
 ## Interface: 30300
 ## Title: |cffffd200Sausage|rLFM
-## Notes: Smart LFM tool with auto-raid scanning and candidate queue.
+## Notes: Smart LFM tool with auto-raid scanning, whisper queue and auto-flooder.
 ## Author: Sausage Party / Kokotiar
-## Version: 1.0.2
+## Version: 1.1.0
 ## SavedVariables: SausageLFM_DB
-## SavedVariablesPerCharacter: SausageLFM_CharDB
 
-SausageLFM.lua
+SausageLFM_Core.lua
 SausageLFM_UI.lua
