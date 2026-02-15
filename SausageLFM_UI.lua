@@ -43,7 +43,9 @@ function SLFM:InitializeUI()
     local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     t:SetPoint("TOP", h, "TOP", 0, -14)
     t:SetText("SAUSAGE LFM")
-    CreateFrame("Button", nil, f, "UIPanelCloseButton"):SetPoint("TOPRIGHT", -8, -8)
+    
+    local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", -8, -8)
 
     -- Sektor: Class Selector (Zlatý)
     local cb = CreateFrame("Frame", nil, f)
@@ -91,11 +93,19 @@ function SLFM:InitializeUI()
         if SausageLFM_DB.isFlooding then SLFM:UpdateRaidInfo() end
     end)
 
-    -- Footer
-    f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"):SetPoint("BOTTOMLEFT", 20, 15):SetText("v" .. SAUSAGE_VERSION)
-    f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"):SetPoint("BOTTOM", 0, 15):SetText("by Sausage Party")
+    -- Footer (Opravené reťazenie metód pre 3.3.5a)
+    local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    verText:SetPoint("BOTTOMLEFT", 20, 15)
+    verText:SetText("v" .. SAUSAGE_VERSION)
+
+    local credText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    credText:SetPoint("BOTTOM", 0, 15)
+    credText:SetText("by Sausage Party")
+
     local updateBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    updateBtn:SetSize(110, 25):SetPoint("BOTTOMRIGHT", -20, 15):SetText("Check Updates")
+    updateBtn:SetSize(110, 25)
+    updateBtn:SetPoint("BOTTOMRIGHT", -20, 15)
+    updateBtn:SetText("Check Updates")
 
     -- 2. RAID OVERVIEW (Ľavé bočné krídlo)
     local rf = CreateFrame("Frame", "SausageLFM_Raid", f)
@@ -116,7 +126,9 @@ function SLFM:InitializeUI()
     qf.title:SetText("Candidate Queue")
     
     local clearBtn = CreateFrame("Button", nil, qf, "UIPanelButtonTemplate")
-    clearBtn:SetSize(100, 22):SetPoint("BOTTOM", 0, 10):SetText("Clear Queue")
+    clearBtn:SetSize(100, 22)
+    clearBtn:SetPoint("BOTTOM", 0, 10)
+    clearBtn:SetText("Clear Queue")
     clearBtn:SetScript("OnClick", function() wipe(SLFM.QueueData); SLFM:RefreshQueueTable() end)
 
     -- Minimap Icon
@@ -180,9 +192,11 @@ function SLFM:RefreshQueueTable()
             r.t = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             r.t:SetPoint("LEFT", 0, 0)
             
-            -- Invite Tlačidlo
+            -- Invite Tlačidlo (Opravené reťazenie)
             r.invBtn = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
-            r.invBtn:SetSize(35, 18):SetPoint("RIGHT", -5, 0):SetText("Inv")
+            r.invBtn:SetSize(35, 18)
+            r.invBtn:SetPoint("RIGHT", -5, 0)
+            r.invBtn:SetText("Inv")
             
             self.queueRows[i] = r
         end
