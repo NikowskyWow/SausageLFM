@@ -1,8 +1,8 @@
 ## Interface: 30300
 ## Title: |cffffd200Sausage|rLFM
-## Notes: Smart LFM tool with auto-raid scanning, whisper queue and auto-flooder.
+## Notes: The Ultimate Raid Leader Command Center.
 ## Author: Sausage Party / Kokotiar
-## Version: 1.1.0
+## Version: @project-version@
 ## SavedVariables: SausageLFM_DB
 
 SausageLFM_Core.lua

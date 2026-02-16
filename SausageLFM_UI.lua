@@ -1,25 +1,35 @@
+-- SausageLFM_UI.lua
 local SLFM = SausageLFM
-local SAUSAGE_VERSION = "1.1.0"
 
-local function CreateSausageBackdrop(frame, borderType)
-    local color = {0, 0.7, 1, 1} -- Modrá (General)
-    if borderType == "priority" then color = {1, 0.8, 0, 1} -- Zlatá
-    elseif borderType == "gray" then color = {0.6, 0.6, 0.6, 1} end -- Šedá
-
+local function CreateSausageBackdrop(frame, colorType)
+    local c = {0, 0.7, 1, 1} -- Default Blue
+    if colorType == "gold" then c = {1, 0.8, 0, 1}
+    elseif colorType == "gray" then c = {0.6, 0.6, 0.6, 1} end
     frame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         tile = true, tileSize = 16, edgeSize = 16,
         insets = { left = 4, right = 4, top = 4, bottom = 4 }
     })
-    frame:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
-    frame:SetBackdropBorderColor(unpack(color))
+    frame:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+    frame:SetBackdropBorderColor(unpack(c))
+end
+
+-- Rýchly Tooltip generátor pre Hover
+local function SetHoverTooltip(frame, title, text)
+    frame:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(title, 1, 0.8, 0)
+        if text then GameTooltip:AddLine(text, 1, 1, 1, true) end
+        GameTooltip:Show()
+    end)
+    frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
 function SLFM:InitializeUI()
-    -- 1. MAIN FRAME (Stred)
+    -- 🏰 MAIN FRAME
     local f = CreateFrame("Frame", "SausageLFM_Main", UIParent)
-    f:SetSize(400, 350)
+    f:SetSize(880, 480)
     f:SetPoint("CENTER")
     f:SetMovable(true)
     f:EnableMouse(true)
@@ -27,7 +37,7 @@ function SLFM:InitializeUI()
     f:SetScript("OnDragStart", f.StartMoving)
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     tinsert(UISpecialFrames, "SausageLFM_Main")
-
+    
     f:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -35,182 +45,209 @@ function SLFM:InitializeUI()
         insets = { left = 11, right = 12, top = 12, bottom = 11 }
     })
 
-    -- Hlavička & Zatváracie tlačidlo
+    -- HEADER
     local h = f:CreateTexture(nil, "OVERLAY")
     h:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
-    h:SetSize(300, 64)
+    h:SetSize(350, 64)
     h:SetPoint("TOP", 0, 12)
     local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     t:SetPoint("TOP", h, "TOP", 0, -14)
-    t:SetText("SAUSAGE LFM")
+    t:SetText("SAUSAGE COMMAND CENTER")
+    CreateFrame("Button", nil, f, "UIPanelCloseButton"):SetPoint("TOPRIGHT", -8, -8)
+
+    -- 📋 LFT PANEL (Raid Overview)
+    local left = CreateFrame("Frame", "SausageLFM_Raid", f)
+    left:SetSize(250, 390)
+    left:SetPoint("TOPLEFT", 15, -45)
+    CreateSausageBackdrop(left, "gray")
+    left.t = left:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    left.t:SetPoint("TOP", 0, -10)
+    left.t:SetText("Raid Overview")
+
+    -- 🎛️ MID PANEL (Controls)
+    local mid = CreateFrame("Frame", "SausageLFM_Ctrl", f)
+    mid:SetSize(330, 390)
+    mid:SetPoint("TOPLEFT", left, "TOPRIGHT", 10, 0)
     
-    local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
-    closeBtn:SetPoint("TOPRIGHT", -8, -8)
+    -- EditBox pre Min GS
+    local gsBox = CreateFrame("EditBox", nil, mid, "InputBoxTemplate")
+    gsBox:SetSize(50, 20)
+    gsBox:SetPoint("TOPRIGHT", -20, -20)
+    gsBox:SetAutoFocus(false)
+    gsBox:SetText(tostring(SausageLFM_DB.minGS))
+    gsBox:SetScript("OnTextChanged", function(self) SausageLFM_DB.minGS = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
+    local gsLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    gsLbl:SetPoint("RIGHT", gsBox, "LEFT", -5, 0)
+    gsLbl:SetText("Min GS:")
 
-    -- Sektor: Class Selector (Zlatý)
-    local cb = CreateFrame("Frame", nil, f)
-    cb:SetSize(360, 120)
-    cb:SetPoint("TOP", 0, -40)
-    CreateSausageBackdrop(cb, "priority")
-    local lbl = cb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lbl:SetPoint("TOPLEFT", 10, -10)
-    lbl:SetText("Hľadané Classy (Klikni -> pridá do MSG, Skenuje Raid):")
-
-    f.classButtons = {}
-    local classes = {"WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "DEATHKNIGHT", "SHAMAN", "MAGE", "WARLOCK", "DRUID"}
-    for i, class in ipairs(classes) do
-        local btn = CreateFrame("Button", nil, cb)
-        btn:SetSize(32, 32)
-        local row = i <= 5 and 0 or 1
-        local col = (i-1) % 5
-        btn:SetPoint("TOPLEFT", 25 + (col * 65), -35 - (row * 40))
+    -- Zoznam Specov (Statický)
+    local specs = {"Holy Paladin", "Resto Shaman", "Resto Druid", "Disc Priest", "Prot Paladin", "Blood DK", "Ranged DPS", "Melee DPS"}
+    for i, spec in ipairs(specs) do
+        local row = CreateFrame("Frame", nil, mid)
+        row:SetSize(300, 22)
+        row:SetPoint("TOPLEFT", 20, -50 - (i*25))
         
-        local tex = btn:CreateTexture(nil, "BACKGROUND")
-        tex:SetAllPoints()
-        tex:SetTexture("Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes")
-        tex:SetTexCoord(unpack(CLASS_ICON_TCOORDS[class]))
+        local txt = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        txt:SetPoint("LEFT", 0, 0)
+        txt:SetText(spec)
         
-        btn:SetScript("OnClick", function()
-            SausageLFM_DB.neededClasses[class] = not SausageLFM_DB.neededClasses[class]
-            SLFM:UpdateUIIcons()
-            SLFM:UpdateRaidInfo()
-        end)
-        f.classButtons[class] = btn
+        local box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+        box:SetSize(25, 20)
+        box:SetPoint("RIGHT", -10, 0)
+        box:SetAutoFocus(false)
+        box:SetText(tostring(SausageLFM_DB.targets[spec] or 0))
+        box:SetScript("OnTextChanged", function(self) SausageLFM_DB.targets[spec] = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
     end
 
     -- Štart Button & Preview
-    f.msgPreview = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.msgPreview:SetPoint("TOP", cb, "BOTTOM", 0, -20)
-    f.msgPreview:SetWidth(340)
+    f.preview = mid:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    f.preview:SetPoint("BOTTOM", 0, 50)
+    f.preview:SetWidth(310)
     
-    local startBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    startBtn:SetSize(150, 30)
-    startBtn:SetPoint("BOTTOM", 0, 40)
-    startBtn:SetText(SausageLFM_DB.isFlooding and "STOP FLOODING" or "START FLOODING")
+    local startBtn = CreateFrame("Button", nil, mid, "UIPanelButtonTemplate")
+    startBtn:SetSize(180, 30)
+    startBtn:SetPoint("BOTTOM", 0, 10)
+    startBtn:SetText("START FLOODING")
     startBtn:SetScript("OnClick", function(self)
-        SausageLFM_DB.isFlooding = not SausageLFM_DB.isFlooding
-        self:SetText(SausageLFM_DB.isFlooding and "STOP FLOODING" or "START FLOODING")
-        if SausageLFM_DB.isFlooding then SLFM:UpdateRaidInfo() end
+        SLFM.IsFlooding = not SLFM.IsFlooding
+        self:SetText(SLFM.IsFlooding and "STOP FLOODING" or "START FLOODING")
     end)
 
-    -- Footer (Opravené reťazenie metód pre 3.3.5a)
-    local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    verText:SetPoint("BOTTOMLEFT", 20, 15)
-    verText:SetText("v" .. SAUSAGE_VERSION)
+    -- 🛡️ RIGHT PANEL (Candidate Queue)
+    local right = CreateFrame("Frame", "SausageLFM_Queue", f)
+    right:SetSize(250, 390)
+    right:SetPoint("TOPLEFT", mid, "TOPRIGHT", 10, 0)
+    CreateSausageBackdrop(right, "gold")
+    right.t = right:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    right.t:SetPoint("TOP", 0, -10)
+    right.t:SetText("Candidate Queue")
 
-    local credText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    credText:SetPoint("BOTTOM", 0, 15)
-    credText:SetText("by Sausage Party")
-
-    local updateBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    updateBtn:SetSize(110, 25)
-    updateBtn:SetPoint("BOTTOMRIGHT", -20, 15)
-    updateBtn:SetText("Check Updates")
-
-    -- 2. RAID OVERVIEW (Ľavé bočné krídlo)
-    local rf = CreateFrame("Frame", "SausageLFM_Raid", f)
-    rf:SetSize(220, 350)
-    rf:SetPoint("TOPRIGHT", f, "TOPLEFT", -5, 0)
-    CreateSausageBackdrop(rf, "gray")
-    rf.title = rf:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    rf.title:SetPoint("TOP", 0, -10)
-    rf.title:SetText("Raid Overview")
-
-    -- 3. CANDIDATE QUEUE (Pravé bočné krídlo)
-    local qf = CreateFrame("Frame", "SausageLFM_Queue", f)
-    qf:SetSize(250, 350)
-    qf:SetPoint("TOPLEFT", f, "TOPRIGHT", 5, 0)
-    CreateSausageBackdrop(qf, "general")
-    qf.title = qf:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    qf.title:SetPoint("TOP", 0, -10)
-    qf.title:SetText("Candidate Queue")
+    -- FOOTER
+    f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"):SetPoint("BOTTOMLEFT", 20, 15):SetText("v" .. SLFM.Version)
+    f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"):SetPoint("BOTTOM", 0, 15):SetText("by Sausage Party")
     
-    local clearBtn = CreateFrame("Button", nil, qf, "UIPanelButtonTemplate")
-    clearBtn:SetSize(100, 22)
-    clearBtn:SetPoint("BOTTOM", 0, 10)
-    clearBtn:SetText("Clear Queue")
-    clearBtn:SetScript("OnClick", function() wipe(SLFM.QueueData); SLFM:RefreshQueueTable() end)
-
-    -- Minimap Icon
+    -- Minimap
     local mini = CreateFrame("Button", "SausageLFM_Minimap", Minimap)
     mini:SetSize(32, 32)
     mini:SetPoint("TOPLEFT")
     mini:SetNormalTexture("Interface\\Icons\\Inv_Misc_Food_54")
     mini:SetScript("OnClick", function() if f:IsShown() then f:Hide() else f:Show() end end)
-    
+
     self:RefreshRaidTable()
 end
 
-function SLFM:UpdateUIIcons()
-    if not SausageLFM_Main then return end
-    for class, btn in pairs(SausageLFM_Main.classButtons) do
-        btn:SetAlpha(SausageLFM_DB.neededClasses[class] and 1.0 or 0.2)
-    end
-    if SausageLFM_Main.msgPreview then
-        SausageLFM_Main.msgPreview:SetText(self.CurrentMsg ~= "" and self.CurrentMsg or "Skenujem raid...")
-    end
-end
-
--- VYKRESLENIE RAID TABUĽKY
-function SLFM:RefreshRaidTable()
-    if not SausageLFM_Raid or not SausageLFM_Raid:IsShown() then return end
-    if not self.raidRows then self.raidRows = {} end
-    for _, r in ipairs(self.raidRows) do r:Hide() end
-
-    local num = GetNumRaidMembers()
-    for i = 1, (num > 0 and num or 1) do
-        local name, _, sub, _, _, fileName = GetRaidRosterInfo(i)
-        if not name then name = UnitName("player"); _, fileName = UnitClass("player"); sub = 1 end
-        
-        if not self.raidRows[i] then
-            local r = CreateFrame("Frame", nil, SausageLFM_Raid)
-            r:SetSize(200, 12)
-            r:SetPoint("TOPLEFT", 10, -25 - (i*12))
-            r.t = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            r.t:SetPoint("LEFT", 0, 0)
-            self.raidRows[i] = r
-        end
-        local color = RAID_CLASS_COLORS[fileName] or {r=1,g=1,b=1}
-        self.raidRows[i].t:SetText(string.format("|cff888888[G%d]|r |cff%02x%02x%02x%s|r", sub, color.r*255, color.g*255, color.b*255, name))
-        self.raidRows[i]:Show()
-    end
-    self:UpdateUIIcons()
-end
-
--- VYKRESLENIE QUEUE TABUĽKY
 function SLFM:RefreshQueueTable()
     if not SausageLFM_Queue or not SausageLFM_Queue:IsShown() then return end
-    if not self.queueRows then self.queueRows = {} end
-    for _, r in ipairs(self.queueRows) do r:Hide() end
+    if not self.qRows then self.qRows = {} end
+    for _, r in ipairs(self.qRows) do r:Hide() end
 
-    for i, data in ipairs(self.QueueData) do
-        if not self.queueRows[i] then
+    for i, data in ipairs(self.Queue) do
+        if not self.qRows[i] then
             local r = CreateFrame("Frame", nil, SausageLFM_Queue)
-            r:SetSize(230, 20)
-            r:SetPoint("TOPLEFT", 10, -20 - (i*22))
+            r:SetSize(230, 24)
+            r:SetPoint("TOPLEFT", 10, -25 - (i*26))
+            
+            -- WIM Envelope (Mail Icon)
+            r.env = CreateFrame("Button", nil, r)
+            r.env:SetSize(16, 16)
+            r.env:SetPoint("LEFT", 0, 0)
+            r.env:SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
+            
+            r.txt = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            r.txt:SetPoint("LEFT", r.env, "RIGHT", 5, 0)
+
+            -- Lebka Hanby
+            r.skull = r:CreateTexture(nil, "OVERLAY")
+            r.skull:SetSize(16, 16)
+            r.skull:SetPoint("RIGHT", r, "LEFT", 180, 0)
+            r.skull:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_8")
+            
+            -- Actions
+            r.rej = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
+            r.rej:SetSize(20, 18):SetPoint("RIGHT", 0, 0):SetText("X")
+            r.inv = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
+            r.inv:SetSize(35, 18):SetPoint("RIGHT", r.rej, "LEFT", -2, 0):SetText("Inv")
+            
+            self.qRows[i] = r
+        end
+
+        local r = self.qRows[i]
+        -- Envelope Logic (WIM Bridge)
+        if data.unread then UIFrameFlash(r.env, 0.5, 0.5, -1, false, 0, 0) else UIFrameFlashStop(r.env); r.env:SetAlpha(0.4) end
+        r.env:SetScript("OnClick", function() 
+            data.unread = false; self:RefreshQueueTable()
+            ChatFrame_SendTell(data.name) -- Natively triggers WIM!
+        end)
+
+        -- Hover History Tooltip
+        local histText = ""
+        if SLFM.History[data.name] then for _, h in ipairs(SLFM.History[data.name]) do histText = histText .. h .. "\n" end end
+        SetHoverTooltip(r.env, "Whisper History", histText)
+
+        -- Formatting
+        local vData = SLFM.RaidData[data.name]
+        local gsColor = (vData and vData.verified) and "|cff00ff00" or "|cff888888"
+        local theGS = (vData and vData.gs > 0) and vData.gs or (data.gs > 0 and data.gs or "??")
+        r.txt:SetText(data.name .. (data.ds and "|cff00ccff[DS]|r" or "") .. " " .. gsColor .. theGS .. "gs|r")
+
+        -- Skull Logic
+        if vData and vData.skull then 
+            r.skull:Show()
+            SetHoverTooltip(r, "|cffff0000Verification Failed|r", vData.skull)
+            r.skull:SetScript("OnMouseDown", function() vData.skull = nil; vData.verified = true; self:RefreshQueueTable() end) -- Override
+        else r.skull:Hide(); r:SetScript("OnEnter", nil); r:SetScript("OnLeave", nil) end
+
+        -- Buttons
+        r.inv:SetScript("OnClick", function() InviteUnit(data.name) end)
+        r.rej:SetScript("OnClick", function()
+            SendChatMessage("Sorry, our group is full or your spec/gear doesn't match our current needs. Good luck!", "WHISPER", nil, data.name)
+            table.remove(SLFM.Queue, i); self:RefreshQueueTable()
+        end)
+        r:Show()
+    end
+end
+
+function SLFM:RefreshRaidTable()
+    if not SausageLFM_Raid or not SausageLFM_Raid:IsShown() then return end
+    if not self.rRows then self.rRows = {} end
+    for _, r in ipairs(self.rRows) do r:Hide() end
+
+    for i=1, GetNumRaidMembers() do
+        local name = GetRaidRosterInfo(i)
+        if not self.rRows[i] then
+            local r = CreateFrame("Frame", nil, SausageLFM_Raid)
+            r:SetSize(230, 16)
+            r:SetPoint("TOPLEFT", 10, -25 - (i*18))
+            
+            r.env = CreateFrame("Button", nil, r)
+            r.env:SetSize(14, 14):SetPoint("LEFT", 0, 0):SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
             
             r.t = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            r.t:SetPoint("LEFT", 0, 0)
+            r.t:SetPoint("LEFT", r.env, "RIGHT", 5, 0)
             
-            -- Invite Tlačidlo (Opravené reťazenie)
-            r.invBtn = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
-            r.invBtn:SetSize(35, 18)
-            r.invBtn:SetPoint("RIGHT", -5, 0)
-            r.invBtn:SetText("Inv")
-            
-            self.queueRows[i] = r
+            r.k = CreateFrame("Button", nil, r)
+            r.k:SetSize(14, 14):SetPoint("RIGHT", -5, 0)
+            r.k:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+            r.k:SetScript("OnClick", function() 
+                StaticPopupDialogs["SAUSAGELFM_KICK"] = {
+                    text = "Naozaj chceš vyhodiť hráča " .. name .. "?",
+                    button1 = "Yes", button2 = "No",
+                    OnAccept = function() UninviteUnit(name) end,
+                    timeout = 0, whileDead = true, hideOnEscape = true,
+                }
+                StaticPopup_Show("SAUSAGELFM_KICK")
+            end)
+            self.rRows[i] = r
         end
+
+        local r = self.rRows[i]
+        r.env:SetScript("OnClick", function() ChatFrame_SendTell(name) end)
+
+        local vData = SLFM.RaidData[name]
+        local gsColor = (vData and vData.verified) and "|cff00ff00" or "|cff888888"
+        local gsText = (vData and vData.gs and vData.gs > 0) and vData.gs or "Unscanned"
         
-        local colorStr = "|cffffffff"
-        if data.class ~= "Unknown" and RAID_CLASS_COLORS[data.class] then
-            local c = RAID_CLASS_COLORS[data.class]
-            colorStr = string.format("|cff%02x%02x%02x", c.r*255, c.g*255, c.b*255)
-        end
-        
-        local gsText = data.gs > 0 and (data.gs .. " GS") or "No GS"
-        self.queueRows[i].t:SetText(string.format("%s%s|r |cffffd200(%s)|r", colorStr, data.name, gsText))
-        
-        self.queueRows[i].invBtn:SetScript("OnClick", function() InviteUnit(data.name) end)
-        self.queueRows[i]:Show()
+        r.t:SetText(name .. " - " .. gsColor .. gsText .. "|r " .. ((vData and vData.skull) and "|cffff0000[!]Lebka|r" or ""))
+        r:Show()
     end
 end
