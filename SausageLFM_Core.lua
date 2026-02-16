@@ -185,5 +185,54 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
-SLASH_SAUSAGELFM1 = "/slfm"
-SlashCmdList["SAUSAGELFM"] = function() if SausageLFM_Main then if SausageLFM_Main:IsShown() then SausageLFM_Main:Hide() else SausageLFM_Main:Show() end end end
+-- -----------------------------------------------------------------------------
+-- 🚀 THE IGNITION & SECURITY (Minimap & Slash Command)
+-- -----------------------------------------------------------------------------
+
+-- Bezpečnostná kontrola: Kto môže vidieť UI?
+local function CanManageLFM()
+    if GetNumRaidMembers() == 0 then return true end -- Sólo alebo normálna Party (môže testovať)
+    if IsRaidLeader() or IsRaidOfficer() then return true end -- RL alebo Assist
+    return false -- Basic Member
+end
+
+-- Ikonka na minimape (Sausage Button)
+local miniBtn = CreateFrame("Button", "SausageLFM_MinimapBtn", Minimap)
+miniBtn:SetSize(32, 32)
+miniBtn:SetFrameStrata("MEDIUM")
+miniBtn:SetFrameLevel(8)
+miniBtn:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 0, -50) -- Pozícia na minimape
+miniBtn:SetNormalTexture("Interface\\Icons\\Inv_Misc_Food_54") -- Ikonka jedla/klobásy
+miniBtn:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+
+-- Blizzard okraj pre ikonku, nech to vyzerá natívne
+local border = miniBtn:CreateTexture(nil, "OVERLAY")
+border:SetSize(52, 52)
+border:SetPoint("TOPLEFT", miniBtn, "TOPLEFT", -10, 10)
+border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+
+-- Hlavný spúšťač
+local function ToggleSausageUI()
+    if not CanManageLFM() then
+        print("|cffffd200Sausage|rLFM: Si bežný člen raidu (Ghost Agent). UI je skryté a chránené.")
+        return
+    end
+
+    -- Ak UI ešte neexistuje, vytvoríme ho
+    if not SausageLFM_Main then 
+        SLFM:InitializeUI() 
+    end
+
+    -- Zobraziť / Skryť
+    if SausageLFM_Main:IsShown() then 
+        SausageLFM_Main:Hide() 
+    else 
+        SausageLFM_Main:Show() 
+        SLFM:RefreshRaidTable()
+        SLFM:RefreshQueueTable()
+    end
+end
+
+-- Kliknutie na minimapu
+miniBtn:SetScript("OnClick", ToggleSausageUI)
+
