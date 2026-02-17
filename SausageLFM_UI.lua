@@ -133,12 +133,16 @@ function SLFM:InitializeUI()
     gsBox:SetAutoFocus(false)
     gsBox:SetText(tostring(SausageLFM_DB.minGS))
     gsBox:SetScript("OnTextChanged", function(self) SausageLFM_DB.minGS = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
+    
     local gsLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     gsLbl:SetPoint("RIGHT", gsBox, "LEFT", -5, 0)
     gsLbl:SetText("Min GS:")
 
     -- Generické Role (Tank, Heal, mDPS, rDPS)
-    mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"):SetPoint("TOPLEFT", 15, -80):SetText("Basic Roles:")
+    local brLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    brLbl:SetPoint("TOPLEFT", 15, -80)
+    brLbl:SetText("Basic Roles:")
+    
     local rList = {"Tank", "Heal", "mDPS", "rDPS"}
     for i, r in ipairs(rList) do
         local rLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -154,7 +158,10 @@ function SLFM:InitializeUI()
     end
 
     -- Spec Dropdown (Pridávanie)
-    mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"):SetPoint("TOPLEFT", 15, -145):SetText("Specific Specs:")
+    local ssLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ssLbl:SetPoint("TOPLEFT", 15, -145)
+    ssLbl:SetText("Specific Specs:")
+    
     local currentSelSpec = "Holy Paladin"
     local specDrop = CreateFrame("Frame", "SLFM_SpecDrop", mid, "UIDropDownMenuTemplate")
     specDrop:SetPoint("TOPLEFT", -5, -160)
@@ -190,14 +197,20 @@ function SLFM:InitializeUI()
                 row:SetPoint("TOPLEFT", 0, -((idx-1)*24))
                 
                 local btn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-                btn:SetSize(20, 20):SetPoint("LEFT", 0, 0):SetText("X")
+                btn:SetSize(20, 20)
+                btn:SetPoint("LEFT", 0, 0)
+                btn:SetText("X")
                 btn:SetScript("OnClick", function() SausageLFM_DB.specs[sp] = nil; DrawSpecs(); SLFM:UpdateMessage() end)
                 
                 local txt = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                txt:SetPoint("LEFT", btn, "RIGHT", 5, 0):SetText(sp)
+                txt:SetPoint("LEFT", btn, "RIGHT", 5, 0)
+                txt:SetText(sp)
                 
                 local box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
-                box:SetSize(30, 20):SetPoint("RIGHT", -20, 0):SetAutoFocus(false):SetText(tostring(num))
+                box:SetSize(30, 20)
+                box:SetPoint("RIGHT", -20, 0)
+                box:SetAutoFocus(false)
+                box:SetText(tostring(num))
                 box:SetScript("OnTextChanged", function(self) SausageLFM_DB.specs[sp] = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
                 
                 table.insert(specCont.rows, row)
@@ -218,22 +231,35 @@ function SLFM:InitializeUI()
     DrawSpecs() -- Init kreslenie
 
     -- Kanály a Delay (Broadcast Engine)
-    mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"):SetPoint("BOTTOMLEFT", 15, 120):SetText("Broadcast:")
+    local bcLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    bcLbl:SetPoint("BOTTOMLEFT", 15, 120)
+    bcLbl:SetText("Broadcast:")
     
     local delayBox = CreateFrame("EditBox", nil, mid, "InputBoxTemplate")
-    delayBox:SetSize(30, 20):SetPoint("BOTTOMLEFT", 60, 118):SetAutoFocus(false):SetText(tostring(SausageLFM_DB.interval))
+    delayBox:SetSize(30, 20)
+    delayBox:SetPoint("BOTTOMLEFT", 60, 118)
+    delayBox:SetAutoFocus(false)
+    delayBox:SetText(tostring(SausageLFM_DB.interval))
     delayBox:SetScript("OnTextChanged", function(self) SausageLFM_DB.interval = tonumber(self:GetText()) or 45 end)
-    mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"):SetPoint("RIGHT", delayBox, "LEFT", -5, 0):SetText("Delay:")
-    mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"):SetPoint("LEFT", delayBox, "RIGHT", 5, 0):SetText("sec")
+    
+    local dlLbl1 = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    dlLbl1:SetPoint("RIGHT", delayBox, "LEFT", -5, 0)
+    dlLbl1:SetText("Delay:")
+    
+    local dlLbl2 = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    dlLbl2:SetPoint("LEFT", delayBox, "RIGHT", 5, 0)
+    dlLbl2:SetText("sec")
 
     local cX = 15
     for _, ch in ipairs({"World", "Global", "LFG", "Party"}) do
         local cb = CreateFrame("CheckButton", nil, mid, "UICheckButtonTemplate")
         cb:SetSize(24, 24)
         cb:SetPoint("BOTTOMLEFT", cX, 95)
+        
         cb.t = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         cb.t:SetPoint("LEFT", cb, "RIGHT", 0, 0)
         cb.t:SetText(ch)
+        
         cb:SetChecked(SausageLFM_DB.channels[ch])
         cb:SetScript("OnClick", function(self) SausageLFM_DB.channels[ch] = self:GetChecked() end)
         cX = cX + 75
@@ -284,18 +310,27 @@ function SLFM:RefreshQueueTable()
             r:SetPoint("TOPLEFT", 10, -25 - (i*26))
             
             r.env = CreateFrame("Button", nil, r)
-            r.env:SetSize(16, 16):SetPoint("LEFT", 0, 0):SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
+            r.env:SetSize(16, 16)
+            r.env:SetPoint("LEFT", 0, 0)
+            r.env:SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
+            
             r.txt = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             r.txt:SetPoint("LEFT", r.env, "RIGHT", 5, 0)
 
             r.skull = r:CreateTexture(nil, "OVERLAY")
-            r.skull:SetSize(16, 16):SetPoint("RIGHT", r, "LEFT", 180, 0)
+            r.skull:SetSize(16, 16)
+            r.skull:SetPoint("RIGHT", r, "LEFT", 180, 0)
             r.skull:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_8")
             
             r.rej = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
-            r.rej:SetSize(20, 18):SetPoint("RIGHT", 0, 0):SetText("X")
+            r.rej:SetSize(20, 18)
+            r.rej:SetPoint("RIGHT", 0, 0)
+            r.rej:SetText("X")
+            
             r.inv = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
-            r.inv:SetSize(35, 18):SetPoint("RIGHT", r.rej, "LEFT", -2, 0):SetText("Inv")
+            r.inv:SetSize(35, 18)
+            r.inv:SetPoint("RIGHT", r.rej, "LEFT", -2, 0)
+            r.inv:SetText("Inv")
             
             self.qRows[i] = r
         end
@@ -328,9 +363,6 @@ function SLFM:RefreshQueueTable()
     end
 end
 
--- ========================================================
--- RAID ROSTER KATEGÓRIE
--- ========================================================
 function SLFM:RefreshRaidTable()
     if not SausageLFM_Raid or not SausageLFM_Raid:IsShown() then return end
     if not self.rRows then self.rRows = {} end
@@ -356,9 +388,13 @@ function SLFM:RefreshRaidTable()
         if #categories[role] > 0 or role == "Uncategorized" then
             if not self.rRows[rowIndex] then self.rRows[rowIndex] = CreateFrame("Button", nil, SausageLFM_Raid) end
             local head = self.rRows[rowIndex]
-            head:SetSize(230, 14):SetPoint("TOPLEFT", 10, yOffset)
+            head:SetSize(230, 14)
+            head:SetPoint("TOPLEFT", 10, yOffset)
+            
             if not head.t then head.t = head:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall") end
-            head.t:SetPoint("LEFT", 0, 0):SetText("- " .. role .. " -")
+            head.t:SetPoint("LEFT", 0, 0)
+            head.t:SetText("- " .. role .. " -")
+            
             if head.env then head.env:Hide() end
             if head.k then head.k:Hide() end
             head:SetScript("OnClick", nil)
@@ -370,11 +406,14 @@ function SLFM:RefreshRaidTable()
             for _, name in ipairs(categories[role]) do
                 if not self.rRows[rowIndex] then self.rRows[rowIndex] = CreateFrame("Button", nil, SausageLFM_Raid) end
                 local r = self.rRows[rowIndex]
-                r:SetSize(230, 16):SetPoint("TOPLEFT", 10, yOffset)
+                r:SetSize(230, 16)
+                r:SetPoint("TOPLEFT", 10, yOffset)
                 
                 if not r.env then
                     r.env = CreateFrame("Button", nil, r)
-                    r.env:SetSize(14, 14):SetPoint("LEFT", 0, 0):SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
+                    r.env:SetSize(14, 14)
+                    r.env:SetPoint("LEFT", 0, 0)
+                    r.env:SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
                 end
                 r.env:Show()
                 r.env:SetScript("OnClick", function() ChatFrame_SendTell(name) end)
@@ -384,7 +423,9 @@ function SLFM:RefreshRaidTable()
 
                 if not r.k then
                     r.k = CreateFrame("Button", nil, r)
-                    r.k:SetSize(14, 14):SetPoint("RIGHT", -5, 0):SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+                    r.k:SetSize(14, 14)
+                    r.k:SetPoint("RIGHT", -5, 0)
+                    r.k:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
                 end
                 r.k:Show()
                 r.k:SetScript("OnClick", function() 
