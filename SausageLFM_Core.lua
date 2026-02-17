@@ -1,231 +1,200 @@
--- SausageLFM_Core.lua
-local addonName, L = ...
-SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
+-- SausageLFM_UI.lua
 local SLFM = SausageLFM
 
--- PREMENNÉ A DATABÁZA
-SLFM.Version = "" -- Pripravené pre tvoj auto-version skript
-SLFM.Queue = {}
-SLFM.RaidData = {}
-SLFM.History = {}
-SLFM.IsFlooding = false
-SLFM.CurrentMsg = ""
-local inspectQueue = {}
-local lastFlood, lastInspect = 0, 0
-local InCombat = false
-
-local defaults = {
-    interval = 45,
-    minGS = 0,
-    instance = "ICC",
-    mode = "25",
-    isHC = false,
-    reqAchiev = false,
-    roles = {Tank = 0, Heal = 0, mDPS = 0, rDPS = 0},
-    specs = {},
-    channels = {World = false, Global = false, LFG = false, Party = true}
-}
-
--- 🧠 1. GS ROUTER & VERIFICATION ENGINE
-function SLFM:GetExternalGS(playerName)
-    local realm = GetRealmName()
-    if GS_Data and GS_Data[realm] and GS_Data[realm].Players and GS_Data[realm].Players[playerName] then
-        return tonumber(GS_Data[realm].Players[playerName].GearScore) or 0
-    end
-    return 0
+local function CreateSausageBackdrop(frame, colorType)
+    frame:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    frame:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+    local c = (colorType == "gold") and {1, 0.8, 0, 1} or {0.6, 0.6, 0.6, 1}
+    frame:SetBackdropBorderColor(unpack(c))
 end
 
-function SLFM:VerifyPlayer(unit)
-    if InCombat then return end
-    local name = UnitName(unit)
-    if not name then return end
-
-    local pvpCount = 0
-    local gs = self:GetExternalGS(name)
+function SLFM:InitializeUI()
+    local f = CreateFrame("Frame", "SausageLFM_Main", UIParent)
+    f:SetSize(900, 540)
+    f:SetPoint("CENTER")
+    f:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 }
+    })
+    f:EnableMouse(true)
+    f:SetMovable(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
     
-    -- PvP Scan (Base-Item Trick: odstraňuje enchanty a gemy)
-    for i = 1, 18 do
-        local link = GetInventoryItemLink(unit, i)
-        if link then
-            local itemID = link:match("item:(%d+)")
-            if itemID then
-                local baseLink = "item:"..itemID..":0:0:0:0:0:0:0"
-                local stats = GetItemStats(baseLink)
-                if stats and stats["ITEM_MOD_RESILIENCE_RATING_SHORT"] then
-                    pvpCount = pvpCount + 1
-                end
-            end
+    local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    t:SetPoint("TOP", 0, -15)
+    t:SetText("SAUSAGE COMMAND CENTER")
+    
+    CreateFrame("Button", nil, f, "UIPanelCloseButton"):SetPoint("TOPRIGHT", -8, -8)
+
+    -- LEFT PANEL (Raid)
+    local left = CreateFrame("Frame", nil, f)
+    left:SetSize(250, 450)
+    left:SetPoint("TOPLEFT", 15, -45)
+    CreateSausageBackdrop(left, "gray")
+
+    -- MID PANEL
+    local mid = CreateFrame("Frame", nil, f)
+    mid:SetSize(350, 450)
+    mid:SetPoint("TOPLEFT", left, "TOPRIGHT", 10, 0)
+
+    -- DROPDOWN: INSTANCE
+    local instDrop = CreateFrame("Frame", "SLFM_InstDrop", mid, "UIDropDownMenuTemplate")
+    instDrop:SetPoint("TOPLEFT", -15, -10)
+    UIDropDownMenu_Initialize(instDrop, function()
+        local info = UIDropDownMenu_CreateInfo()
+        for _, v in ipairs({"ICC", "TOC", "Ulduar", "Naxx", "Dungeon"}) do
+            info.text = v; info.func = function() SausageLFM_DB.instance = v; UIDropDownMenu_SetText(instDrop, v); SLFM:UpdateMessage() end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    UIDropDownMenu_SetWidth(instDrop, 100)
+    UIDropDownMenu_SetText(instDrop, SausageLFM_DB.instance)
+
+    -- MIN GS BOX
+    local gsBox = CreateFrame("EditBox", nil, mid, "InputBoxTemplate")
+    gsBox:SetSize(60, 25)
+    gsBox:SetPoint("TOPRIGHT", -15, -10)
+    gsBox:SetAutoFocus(false)
+    gsBox:SetText(tostring(SausageLFM_DB.minGS))
+    gsBox:SetScript("OnTextChanged", function(self) SausageLFM_DB.minGS = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
+    local gl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    gl:SetPoint("RIGHT", gsBox, "LEFT", -5, 0); gl:SetText("Min GS:")
+
+    -- BASIC ROLES (Tank, Heal, mDPS, rDPS)
+    local rX = 15
+    for _, r in ipairs({"Tank", "Heal", "mDPS", "rDPS"}) do
+        local rb = CreateFrame("EditBox", nil, mid, "InputBoxTemplate")
+        rb:SetSize(35, 25); rb:SetPoint("TOPLEFT", rX, -70); rb:SetAutoFocus(false)
+        rb:SetText(tostring(SausageLFM_DB.roles[r] or 0))
+        rb:SetScript("OnTextChanged", function(self) SausageLFM_DB.roles[r] = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
+        local rl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        rl:SetPoint("BOTTOM", rb, "TOP", 0, 2); rl:SetText(r)
+        rX = rX + 80
+    end
+
+    -- SPEC SELECTOR
+    local specDrop = CreateFrame("Frame", "SLFM_SpecDrop", mid, "UIDropDownMenuTemplate")
+    specDrop:SetPoint("TOPLEFT", -15, -120)
+    local selectedSpec = "Holy Paladin"
+    UIDropDownMenu_Initialize(specDrop, function()
+        local info = UIDropDownMenu_CreateInfo()
+        for _, v in ipairs({"Holy Paladin", "Resto Shaman", "Resto Druid", "Disc Priest", "Shadow Priest", "Boomkin"}) do
+            info.text = v; info.func = function() selectedSpec = v; UIDropDownMenu_SetText(specDrop, v) end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    UIDropDownMenu_SetWidth(specDrop, 120); UIDropDownMenu_SetText(specDrop, selectedSpec)
+
+    local addBtn = CreateFrame("Button", nil, mid, "UIPanelButtonTemplate")
+    addBtn:SetSize(60, 25); addBtn:SetPoint("LEFT", specDrop, "RIGHT", -10, 2); addBtn:SetText("Add")
+    
+    local specCont = CreateFrame("Frame", nil, mid)
+    specCont:SetSize(300, 150); specCont:SetPoint("TOPLEFT", 15, -160)
+    
+    local function RefreshSpecs()
+        if specCont.lines then for _, l in ipairs(specCont.lines) do l:Hide() end end
+        specCont.lines = {}
+        local i = 0
+        for s, n in pairs(SausageLFM_DB.specs) do
+            local l = CreateFrame("Frame", nil, specCont)
+            l:SetSize(300, 25); l:SetPoint("TOPLEFT", 0, -(i*25))
+            local txt = l:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); txt:SetPoint("LEFT", 0, 0); txt:SetText(s)
+            local eb = CreateFrame("EditBox", nil, l, "InputBoxTemplate")
+            eb:SetSize(30, 25); eb:SetPoint("RIGHT", -50, 0); eb:SetText(tostring(n))
+            eb:SetScript("OnTextChanged", function(self) SausageLFM_DB.specs[s] = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
+            local del = CreateFrame("Button", nil, l, "UIPanelButtonTemplate")
+            del:SetSize(20, 20); del:SetPoint("RIGHT", 0, 0); del:SetText("X")
+            del:SetScript("OnClick", function() SausageLFM_DB.specs[s] = nil; RefreshSpecs(); SLFM:UpdateMessage() end)
+            tinsert(specCont.lines, l); i = i + 1
         end
     end
+    addBtn:SetScript("OnClick", function() SausageLFM_DB.specs[selectedSpec] = 1; RefreshSpecs(); SLFM:UpdateMessage() end)
+    RefreshSpecs()
 
-    SLFM.RaidData[name] = SLFM.RaidData[name] or {}
-    SLFM.RaidData[name].pvp = pvpCount
-    SLFM.RaidData[name].gs = gs > 0 and gs or SLFM.RaidData[name].gs
-    SLFM.RaidData[name].verified = true
+    -- BROADCAST & TIMER
+    local timerBox = CreateFrame("EditBox", nil, mid, "InputBoxTemplate")
+    timerBox:SetSize(40, 25); timerBox:SetPoint("BOTTOMLEFT", 60, 110); timerBox:SetText(tostring(SausageLFM_DB.interval))
+    timerBox:SetScript("OnTextChanged", function(self) SausageLFM_DB.interval = tonumber(self:GetText()) or 45 end)
+    local tl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    tl:SetPoint("RIGHT", timerBox, "LEFT", -5, 0); tl:SetText("Timer (s):")
 
-    local skullReason = nil
-    if pvpCount >= 3 then skullReason = "Equipped " .. pvpCount .. " PvP Items." end
-    if SausageLFM_DB.minGS > 0 and SLFM.RaidData[name].gs and SLFM.RaidData[name].gs > 0 and SLFM.RaidData[name].gs < SausageLFM_DB.minGS then
-        skullReason = "GS is below required minimum (" .. SausageLFM_DB.minGS .. ")."
+    local cX = 15
+    for _, ch in ipairs({"World", "Global", "LFG", "Party"}) do
+        local cb = CreateFrame("CheckButton", nil, mid, "UICheckButtonTemplate")
+        cb:SetPoint("BOTTOMLEFT", cX, 80); cb:SetChecked(SausageLFM_DB.channels[ch])
+        cb:SetScript("OnClick", function(self) SausageLFM_DB.channels[ch] = self:GetChecked() end)
+        local cl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        cl:SetPoint("LEFT", cb, "RIGHT", 0, 0); cl:SetText(ch)
+        cX = cX + 80
     end
 
-    SLFM.RaidData[name].skull = skullReason
-    
-    local p2pMsg = "V:"..name..":"..(SLFM.RaidData[name].gs or 0)..":"..(skullReason and "1" or "0")
-    SendAddonMessage("SAUSAGELFM", p2pMsg, "RAID")
+    f.preview = mid:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    f.preview:SetPoint("BOTTOM", 0, 55); f.preview:SetWidth(330)
 
-    if self.RefreshRaidTable then self:RefreshRaidTable() end
-    if self.RefreshQueueTable then self:RefreshQueueTable() end
+    local startBtn = CreateFrame("Button", nil, mid, "UIPanelButtonTemplate")
+    startBtn:SetSize(200, 35); startBtn:SetPoint("BOTTOM", 0, 15); startBtn:SetText("START FLOODING")
+    startBtn:SetScript("OnClick", function(self)
+        SLFM.IsFlooding = not SLFM.IsFlooding
+        self:SetText(SLFM.IsFlooding and "STOP FLOODING" or "START FLOODING")
+    end)
+
+    -- RIGHT PANEL (Queue)
+    local right = CreateFrame("Frame", "SausageLFM_Queue", f)
+    right:SetSize(250, 450); right:SetPoint("TOPLEFT", mid, "TOPRIGHT", 10, 0)
+    CreateSausageBackdrop(right, "gold")
+
+    self:RefreshRaidTable()
 end
 
--- 💧 2. TRICKLE INSPECT QUEUE & COMBAT LOCKDOWN
-SLFM:SetScript("OnUpdate", function(self, elapsed)
-    if InCombat then return end
-
-    if SLFM.IsFlooding then
-        lastFlood = lastFlood + elapsed
-        if lastFlood >= (SausageLFM_DB.interval or 45) then
-            self:UpdateMessage()
-            
-            -- Odoslanie do vybraných kanálov
-            for chan, active in pairs(SausageLFM_DB.channels) do
-                if active then
-                    if chan == "Party" and GetNumPartyMembers() > 0 then
-                        SendChatMessage(SLFM.CurrentMsg, "PARTY")
-                    else
-                        local id = GetChannelName(chan)
-                        if id > 0 then SendChatMessage(SLFM.CurrentMsg, "CHANNEL", nil, id) end
-                    end
-                end
-            end
-            lastFlood = 0
+function SLFM:RefreshQueueTable()
+    if not SausageLFM_Queue or not SausageLFM_Queue:IsShown() then return end
+    if not self.qRows then self.qRows = {} end
+    for _, r in ipairs(self.qRows) do r:Hide() end
+    for i, data in ipairs(self.Queue) do
+        if not self.qRows[i] then
+            local r = CreateFrame("Frame", nil, SausageLFM_Queue)
+            r:SetSize(230, 25); r:SetPoint("TOPLEFT", 5, -15-(i*28))
+            r.t = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); r.t:SetPoint("LEFT", 25, 0)
+            r.env = CreateFrame("Button", nil, r); r.env:SetSize(20, 20); r.env:SetPoint("LEFT", 0, 0); r.env:SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
+            r.inv = CreateFrame("Button", nil, r, "UIPanelButtonTemplate"); r.inv:SetSize(35, 20); r.inv:SetPoint("RIGHT", -25, 0); r.inv:SetText("Inv")
+            r.rej = CreateFrame("Button", nil, r, "UIPanelButtonTemplate"); r.rej:SetSize(20, 20); r.rej:SetPoint("RIGHT", 0, 0); r.rej:SetText("X")
+            self.qRows[i] = r
         end
+        local r = self.qRows[i]
+        r.t:SetText(data.name .. " (" .. (data.gs or "??") .. "gs)")
+        r.inv:SetScript("OnClick", function() InviteUnit(data.name) end)
+        r.rej:SetScript("OnClick", function() table.remove(SLFM.Queue, i); SLFM:RefreshQueueTable() end)
+        r.env:SetScript("OnClick", function() ChatFrame_SendTell(data.name) end)
+        r:Show()
     end
-
-    lastInspect = lastInspect + elapsed
-    if lastInspect > 2.0 and #inspectQueue > 0 then
-        local unit = table.remove(inspectQueue, 1)
-        if CanInspect(unit) and CheckInteractDistance(unit, 1) then
-            NotifyInspect(unit)
-            lastInspect = 0
-        end
-    end
-end)
-
--- 🛡️ 3. SMART MESSAGE BUILDER
-function SLFM:UpdateMessage()
-    local db = SausageLFM_DB
-    local count = GetNumRaidMembers() > 0 and GetNumRaidMembers() or 1
-    local msg = "LFM " .. (db.instance or "ICC") .. " " .. (db.mode or "25") .. (db.isHC and " HC" or "") .. " ("..count.."/".. ((db.mode or "25"):find("10") and 10 or 25) ..")"
-    
-    local needs = ""
-    if db.roles.Tank > 0 then needs = needs .. db.roles.Tank .. "x Tank, " end
-    if db.roles.Heal > 0 then needs = needs .. db.roles.Heal .. "x Heal, " end
-    if db.roles.mDPS > 0 then needs = needs .. db.roles.mDPS .. "x mDPS, " end
-    if db.roles.rDPS > 0 then needs = needs .. db.roles.rDPS .. "x rDPS, " end
-    
-    for spec, target in pairs(db.specs) do
-        if target > 0 then needs = needs .. target .. "x " .. spec .. ", " end
-    end
-    
-    if db.minGS > 0 then msg = msg .. " | Req: " .. db.minGS .. "+ GS" end
-    if db.reqAchiev then msg = msg .. " & Achiev" end
-    
-    SLFM.CurrentMsg = msg .. " - Need: " .. (needs ~= "" and needs:gsub(", $", "") or "PUMPERS") .. " | w me spec/gs!"
-    if SausageLFM_Main and SausageLFM_Main.preview then SausageLFM_Main.preview:SetText(SLFM.CurrentMsg) end
 end
 
--- ⚙️ 4. EVENT MANAGER (DB Failsafe & Whisper Parser)
-SLFM:RegisterEvent("ADDON_LOADED")
-SLFM:RegisterEvent("CHAT_MSG_WHISPER")
-SLFM:RegisterEvent("INSPECT_READY")
-SLFM:RegisterEvent("PLAYER_REGEN_DISABLED")
-SLFM:RegisterEvent("PLAYER_REGEN_ENABLED")
-SLFM:RegisterEvent("CHAT_MSG_ADDON")
-
-SLFM:SetScript("OnEvent", function(self, event, ...)
-    if event == "ADDON_LOADED" and select(1, ...) == addonName then
-        SausageLFM_DB = SausageLFM_DB or defaults
-        -- Failsafe pre staré databázy
-        SausageLFM_DB.roles = SausageLFM_DB.roles or {Tank = 0, Heal = 0, mDPS = 0, rDPS = 0}
-        SausageLFM_DB.specs = SausageLFM_DB.specs or {}
-        SausageLFM_DB.channels = SausageLFM_DB.channels or {World = false, Global = false, LFG = false, Party = true}
-        SausageLFM_DB.interval = SausageLFM_DB.interval or 45
-        SausageLFM_DB.minGS = SausageLFM_DB.minGS or 0
-        SausageLFM_DB.instance = SausageLFM_DB.instance or "ICC"
-        SausageLFM_DB.mode = SausageLFM_DB.mode or "25"
-        
-    elseif event == "PLAYER_REGEN_DISABLED" then InCombat = true
-    elseif event == "PLAYER_REGEN_ENABLED" then InCombat = false
-    elseif event == "INSPECT_READY" then
-        local guid = ...
-        if guid == UnitGUID("target") then self:VerifyPlayer("target") end
-    elseif event == "CHAT_MSG_WHISPER" then
-        local msg, sender = ...
-        SLFM.History[sender] = SLFM.History[sender] or {}
-        table.insert(SLFM.History[sender], "|cff00ff00[Them]:|r " .. msg)
-        
-        msg = msg:lower()
-        local gsMatch = msg:match("(%d[%.%,]?%d?)k") or msg:match("(%d%d%d%d)")
-        local gs = 0
-        if gsMatch then gs = tonumber((gsMatch:gsub(",", "."))); if gs < 100 then gs = gs * 1000 end end
-        
-        local isNew = true
-        for _, q in ipairs(SLFM.Queue) do if q.name == sender then isNew = false; q.gs = gs > 0 and gs or q.gs; q.unread = true break end end
-        if isNew then table.insert(SLFM.Queue, 1, { name = sender, raw = msg, gs = gs, unread = true, ds = msg:find("/") ~= nil }) end
-        
-        if #SLFM.Queue > 15 then table.remove(SLFM.Queue) end
-        if self.RefreshQueueTable then self:RefreshQueueTable() end
-    
-    elseif event == "CHAT_MSG_ADDON" then
-        local prefix, msg, _, sender = ...
-        if prefix == "SAUSAGELFM" and sender ~= UnitName("player") then
-            local cmd, pName, pGs, pSkull = strsplit(":", msg)
-            if cmd == "V" then
-                SLFM.RaidData[pName] = SLFM.RaidData[pName] or {}
-                SLFM.RaidData[pName].gs = tonumber(pGs)
-                SLFM.RaidData[pName].skull = pSkull == "1" and "Flagged by Network" or nil
-                SLFM.RaidData[pName].verified = true
-                if self.RefreshRaidTable then self:RefreshRaidTable() end
-            end
+function SLFM:RefreshRaidTable()
+    if not SausageLFM_Raid or not SausageLFM_Raid:IsShown() then return end
+    if not self.rRows then self.rRows = {} end
+    for _, r in ipairs(self.rRows) do r:Hide() end
+    for i=1, (GetNumRaidMembers() > 0 and GetNumRaidMembers() or 1) do
+        local name = GetRaidRosterInfo(i) or UnitName("player")
+        if not self.rRows[i] then
+            local r = CreateFrame("Frame", nil, SausageLFM_Raid)
+            r:SetSize(230, 20); r:SetPoint("TOPLEFT", 10, -20-(i*22))
+            r.t = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); r.t:SetPoint("LEFT", 20, 0)
+            r.k = CreateFrame("Button", nil, r); r.k:SetSize(16, 16); r.k:SetPoint("RIGHT", -5, 0); r.k:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+            self.rRows[i] = r
         end
+        local r = self.rRows[i]
+        local gs = SLFM:GetExternalGS(name)
+        r.t:SetText(name .. " - " .. (gs > 0 and gs or "Unscanned"))
+        r.k:SetScript("OnClick", function() UninviteUnit(name) end)
+        r:Show()
     end
-end)
-
--- 🚀 5. MINIMAP SPÚŠŤAČ & GHOST MODE
-local function CanManageLFM()
-    if GetNumRaidMembers() == 0 then return true end
-    if IsRaidLeader() or IsRaidOfficer() then return true end
-    return false
 end
-
-local miniBtn = CreateFrame("Button", "SausageLFM_MinimapBtn", Minimap)
-miniBtn:SetSize(32, 32)
-miniBtn:SetFrameStrata("MEDIUM")
-miniBtn:SetFrameLevel(8)
-miniBtn:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 0, -50)
-miniBtn:SetNormalTexture("Interface\\Icons\\Inv_Misc_Food_54")
-miniBtn:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-
-local border = miniBtn:CreateTexture(nil, "OVERLAY")
-border:SetSize(52, 52)
-border:SetPoint("TOPLEFT", miniBtn, "TOPLEFT", -10, 10)
-border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-
-miniBtn:SetScript("OnClick", function()
-    if not CanManageLFM() then
-        print("|cffffd200Sausage|rLFM: Si bežný člen raidu (Ghost Agent). UI je skryté.")
-        return
-    end
-    if not SausageLFM_Main then 
-        SLFM:InitializeUI() 
-        SLFM:UpdateMessage()
-    end
-    if SausageLFM_Main:IsShown() then 
-        SausageLFM_Main:Hide() 
-    else 
-        SausageLFM_Main:Show() 
-        if SLFM.RefreshRaidTable then SLFM:RefreshRaidTable() end
-        if SLFM.RefreshQueueTable then SLFM:RefreshQueueTable() end
-    end
-end)
