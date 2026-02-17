@@ -4,7 +4,7 @@ SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
 -- PREMENNÉ A DATABÁZA
-SLFM.Version = "" -- Pripravené pre tvoj skript
+SLFM.Version = "" -- Pripravené pre tvoj auto-version skript
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -21,8 +21,9 @@ local defaults = {
     mode = "25",
     isHC = false,
     reqAchiev = false,
-    channels = { ["World"] = true, ["Global"] = true },
-    targets = {}
+    roles = {Tank = 0, Heal = 0, mDPS = 0, rDPS = 0},
+    specs = {},
+    channels = {World = false, Global = false, LFG = false, Party = true}
 }
 
 -- 🧠 1. GS ROUTER & VERIFICATION ENGINE
@@ -42,7 +43,7 @@ function SLFM:VerifyPlayer(unit)
     local pvpCount = 0
     local gs = self:GetExternalGS(name)
     
-    -- PvP Scan (Base-Item Trick)
+    -- PvP Scan (Base-Item Trick: odstraňuje enchanty a gemy)
     for i = 1, 18 do
         local link = GetInventoryItemLink(unit, i)
         if link then
@@ -83,12 +84,18 @@ SLFM:SetScript("OnUpdate", function(self, elapsed)
 
     if SLFM.IsFlooding then
         lastFlood = lastFlood + elapsed
-        if lastFlood >= SausageLFM_DB.interval then
+        if lastFlood >= (SausageLFM_DB.interval or 45) then
             self:UpdateMessage()
+            
+            -- Odoslanie do vybraných kanálov
             for chan, active in pairs(SausageLFM_DB.channels) do
                 if active then
-                    local id = GetChannelName(chan)
-                    if id > 0 then SendChatMessage(SLFM.CurrentMsg, "CHANNEL", nil, id) end
+                    if chan == "Party" and GetNumPartyMembers() > 0 then
+                        SendChatMessage(SLFM.CurrentMsg, "PARTY")
+                    else
+                        local id = GetChannelName(chan)
+                        if id > 0 then SendChatMessage(SLFM.CurrentMsg, "CHANNEL", nil, id) end
+                    end
                 end
             end
             lastFlood = 0
@@ -109,10 +116,15 @@ end)
 function SLFM:UpdateMessage()
     local db = SausageLFM_DB
     local count = GetNumRaidMembers() > 0 and GetNumRaidMembers() or 1
-    local msg = "LFM " .. db.instance .. " " .. db.mode .. (db.isHC and " HC" or "") .. " ("..count.."/".. (db.mode:find("10") and 10 or 25) ..")"
+    local msg = "LFM " .. (db.instance or "ICC") .. " " .. (db.mode or "25") .. (db.isHC and " HC" or "") .. " ("..count.."/".. ((db.mode or "25"):find("10") and 10 or 25) ..")"
     
     local needs = ""
-    for spec, target in pairs(db.targets) do
+    if db.roles.Tank > 0 then needs = needs .. db.roles.Tank .. "x Tank, " end
+    if db.roles.Heal > 0 then needs = needs .. db.roles.Heal .. "x Heal, " end
+    if db.roles.mDPS > 0 then needs = needs .. db.roles.mDPS .. "x mDPS, " end
+    if db.roles.rDPS > 0 then needs = needs .. db.roles.rDPS .. "x rDPS, " end
+    
+    for spec, target in pairs(db.specs) do
         if target > 0 then needs = needs .. target .. "x " .. spec .. ", " end
     end
     
@@ -123,7 +135,7 @@ function SLFM:UpdateMessage()
     if SausageLFM_Main and SausageLFM_Main.preview then SausageLFM_Main.preview:SetText(SLFM.CurrentMsg) end
 end
 
--- ⚙️ 4. EVENT MANAGER
+-- ⚙️ 4. EVENT MANAGER (DB Failsafe & Whisper Parser)
 SLFM:RegisterEvent("ADDON_LOADED")
 SLFM:RegisterEvent("CHAT_MSG_WHISPER")
 SLFM:RegisterEvent("INSPECT_READY")
@@ -134,8 +146,14 @@ SLFM:RegisterEvent("CHAT_MSG_ADDON")
 SLFM:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" and select(1, ...) == addonName then
         SausageLFM_DB = SausageLFM_DB or defaults
-        SausageLFM_DB.targets = SausageLFM_DB.targets or {}
+        -- Failsafe pre staré databázy
+        SausageLFM_DB.roles = SausageLFM_DB.roles or {Tank = 0, Heal = 0, mDPS = 0, rDPS = 0}
+        SausageLFM_DB.specs = SausageLFM_DB.specs or {}
+        SausageLFM_DB.channels = SausageLFM_DB.channels or {World = false, Global = false, LFG = false, Party = true}
+        SausageLFM_DB.interval = SausageLFM_DB.interval or 45
         SausageLFM_DB.minGS = SausageLFM_DB.minGS or 0
+        SausageLFM_DB.instance = SausageLFM_DB.instance or "ICC"
+        SausageLFM_DB.mode = SausageLFM_DB.mode or "25"
         
     elseif event == "PLAYER_REGEN_DISABLED" then InCombat = true
     elseif event == "PLAYER_REGEN_ENABLED" then InCombat = false

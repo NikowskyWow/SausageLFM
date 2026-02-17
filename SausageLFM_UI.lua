@@ -27,7 +27,7 @@ end
 
 function SLFM:InitializeUI()
     local f = CreateFrame("Frame", "SausageLFM_Main", UIParent)
-    f:SetSize(880, 520) -- Trošku vyššie, nech sa tam všetko vojde
+    f:SetSize(900, 540)
     f:SetPoint("CENTER")
     f:SetMovable(true)
     f:EnableMouse(true)
@@ -54,52 +54,63 @@ function SLFM:InitializeUI()
     local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", -8, -8)
 
-    -- 📋 LFT PANEL (Raid Overview)
+    -- 📋 LEFT PANEL (Raid)
     local left = CreateFrame("Frame", "SausageLFM_Raid", f)
-    left:SetSize(250, 430)
+    left:SetSize(250, 450)
     left:SetPoint("TOPLEFT", 15, -45)
     CreateSausageBackdrop(left, "gray")
     left.t = left:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     left.t:SetPoint("TOP", 0, -10)
-    left.t:SetText("Raid Overview (Right-Click: Set Role)")
+    left.t:SetText("Raid Overview (Right-Click: Role)")
 
-    -- 🎛️ MID PANEL (Controls)
+    -- 🎛️ MID PANEL (Command & Control)
     local mid = CreateFrame("Frame", "SausageLFM_Ctrl", f)
-    mid:SetSize(330, 430)
+    mid:SetSize(350, 450)
     mid:SetPoint("TOPLEFT", left, "TOPRIGHT", 10, 0)
-    
-    -- == NOVÉ WIDGETY V STREDE ==
 
-    -- Instance Dropdown (Zjednodušený cez cyklické tlačidlo pre WotLK stabilitu)
-    local instBtn = CreateFrame("Button", nil, mid, "UIPanelButtonTemplate")
-    instBtn:SetSize(140, 25)
-    instBtn:SetPoint("TOPLEFT", 15, -15)
-    instBtn:SetText(SausageLFM_DB.instance or "ICC")
-    local instances = {"Naxxramas", "Obsidian Sanctum", "Eye of Eternity", "Vault of Archavon", "Ulduar", "TOC", "ICC", "Dungeon"}
-    instBtn:SetScript("OnClick", function(self)
-        local cur = SausageLFM_DB.instance
-        local nextInst = instances[1]
-        for i, v in ipairs(instances) do if v == cur and instances[i+1] then nextInst = instances[i+1] break end end
-        SausageLFM_DB.instance = nextInst
-        self:SetText(nextInst)
-        SLFM:UpdateMessage()
+    -- Dropdown: Instance
+    local instDrop = CreateFrame("Frame", "SLFM_InstDrop", mid, "UIDropDownMenuTemplate")
+    instDrop:SetPoint("TOPLEFT", -5, -10)
+    UIDropDownMenu_Initialize(instDrop, function(self, level, menuList)
+        local info = UIDropDownMenu_CreateInfo()
+        local insts = {"ICC", "TOC", "Ulduar", "Naxxramas", "Obsidian Sanctum", "Eye of Eternity", "Vault of Archavon", "Dungeon"}
+        for _, v in ipairs(insts) do
+            info.text = v
+            info.arg1 = v
+            info.func = function(self, arg1)
+                SausageLFM_DB.instance = arg1
+                UIDropDownMenu_SetText(instDrop, arg1)
+                SLFM:UpdateMessage()
+            end
+            UIDropDownMenu_AddButton(info)
+        end
     end)
-    SetHoverTooltip(instBtn, "Instance", "Klikaj pre zmenu inštancie.")
+    UIDropDownMenu_SetText(instDrop, SausageLFM_DB.instance)
+    UIDropDownMenu_SetWidth(instDrop, 130)
 
-    -- Mode Button (10 / 25)
-    local modeBtn = CreateFrame("Button", nil, mid, "UIPanelButtonTemplate")
-    modeBtn:SetSize(50, 25)
-    modeBtn:SetPoint("LEFT", instBtn, "RIGHT", 5, 0)
-    modeBtn:SetText(SausageLFM_DB.mode or "25")
-    modeBtn:SetScript("OnClick", function(self)
-        SausageLFM_DB.mode = SausageLFM_DB.mode == "25" and "10" or "25"
-        self:SetText(SausageLFM_DB.mode)
-        SLFM:UpdateMessage()
+    -- Dropdown: Mode
+    local modeDrop = CreateFrame("Frame", "SLFM_ModeDrop", mid, "UIDropDownMenuTemplate")
+    modeDrop:SetPoint("LEFT", instDrop, "RIGHT", -25, 0)
+    UIDropDownMenu_Initialize(modeDrop, function(self, level, menuList)
+        local info = UIDropDownMenu_CreateInfo()
+        local modes = {"10", "25"}
+        for _, v in ipairs(modes) do
+            info.text = v
+            info.arg1 = v
+            info.func = function(self, arg1)
+                SausageLFM_DB.mode = arg1
+                UIDropDownMenu_SetText(modeDrop, arg1)
+                SLFM:UpdateMessage()
+            end
+            UIDropDownMenu_AddButton(info)
+        end
     end)
+    UIDropDownMenu_SetText(modeDrop, SausageLFM_DB.mode)
+    UIDropDownMenu_SetWidth(modeDrop, 60)
 
-    -- Checkboxes (HC a Achiev)
+    -- Toggles & Min GS
     local hcBtn = CreateFrame("CheckButton", nil, mid, "UICheckButtonTemplate")
-    hcBtn:SetPoint("TOPLEFT", 15, -45)
+    hcBtn:SetPoint("TOPLEFT", 10, -45)
     hcBtn:SetSize(26, 26)
     hcBtn.t = hcBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hcBtn.t:SetPoint("LEFT", hcBtn, "RIGHT", 2, 0)
@@ -108,7 +119,7 @@ function SLFM:InitializeUI()
     hcBtn:SetScript("OnClick", function(self) SausageLFM_DB.isHC = self:GetChecked(); SLFM:UpdateMessage() end)
 
     local achBtn = CreateFrame("CheckButton", nil, mid, "UICheckButtonTemplate")
-    achBtn:SetPoint("LEFT", hcBtn.t, "RIGHT", 10, 0)
+    achBtn:SetPoint("LEFT", hcBtn.t, "RIGHT", 5, 0)
     achBtn:SetSize(26, 26)
     achBtn.t = achBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     achBtn.t:SetPoint("LEFT", achBtn, "RIGHT", 2, 0)
@@ -116,44 +127,124 @@ function SLFM:InitializeUI()
     achBtn:SetChecked(SausageLFM_DB.reqAchiev)
     achBtn:SetScript("OnClick", function(self) SausageLFM_DB.reqAchiev = self:GetChecked(); SLFM:UpdateMessage() end)
 
-    -- EditBox pre Min GS
     local gsBox = CreateFrame("EditBox", nil, mid, "InputBoxTemplate")
-    gsBox:SetSize(40, 20)
-    gsBox:SetPoint("TOPRIGHT", -25, -45)
+    gsBox:SetSize(45, 20)
+    gsBox:SetPoint("TOPRIGHT", -15, -48)
     gsBox:SetAutoFocus(false)
-    gsBox:SetTextInsets(5, 0, 0, 0)
-    gsBox:SetText(tostring(SausageLFM_DB.minGS or 0))
+    gsBox:SetText(tostring(SausageLFM_DB.minGS))
     gsBox:SetScript("OnTextChanged", function(self) SausageLFM_DB.minGS = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
     local gsLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     gsLbl:SetPoint("RIGHT", gsBox, "LEFT", -5, 0)
     gsLbl:SetText("Min GS:")
 
-    -- Zoznam Specov (Posunuté nižšie)
-    local specs = {"Holy Paladin", "Resto Shaman", "Resto Druid", "Disc Priest", "Prot Paladin", "Blood DK", "Ranged DPS", "Melee DPS"}
-    for i, spec in ipairs(specs) do
-        local row = CreateFrame("Frame", nil, mid)
-        row:SetSize(300, 22)
-        row:SetPoint("TOPLEFT", 20, -75 - (i*25))
+    -- Generické Role (Tank, Heal, mDPS, rDPS)
+    mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"):SetPoint("TOPLEFT", 15, -80):SetText("Basic Roles:")
+    local rList = {"Tank", "Heal", "mDPS", "rDPS"}
+    for i, r in ipairs(rList) do
+        local rLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        rLbl:SetPoint("TOPLEFT", 15 + ((i-1)*80), -95)
+        rLbl:SetText(r)
         
-        local txt = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        txt:SetPoint("LEFT", 0, 0)
-        txt:SetText(spec)
-        
-        local box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
-        box:SetSize(30, 20) -- Rozšírené pre lepšiu viditeľnosť
-        box:SetPoint("RIGHT", -15, 0)
-        box:SetAutoFocus(false)
-        box:SetTextInsets(5, 0, 0, 0)
-        box:SetText(tostring(SausageLFM_DB.targets[spec] or 0))
-        box:SetScript("OnTextChanged", function(self) SausageLFM_DB.targets[spec] = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
+        local rBox = CreateFrame("EditBox", nil, mid, "InputBoxTemplate")
+        rBox:SetSize(30, 20)
+        rBox:SetPoint("TOPLEFT", 15 + ((i-1)*80), -110)
+        rBox:SetAutoFocus(false)
+        rBox:SetText(tostring(SausageLFM_DB.roles[r] or 0))
+        rBox:SetScript("OnTextChanged", function(self) SausageLFM_DB.roles[r] = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
+    end
+
+    -- Spec Dropdown (Pridávanie)
+    mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"):SetPoint("TOPLEFT", 15, -145):SetText("Specific Specs:")
+    local currentSelSpec = "Holy Paladin"
+    local specDrop = CreateFrame("Frame", "SLFM_SpecDrop", mid, "UIDropDownMenuTemplate")
+    specDrop:SetPoint("TOPLEFT", -5, -160)
+    UIDropDownMenu_Initialize(specDrop, function(self, level, menuList)
+        local info = UIDropDownMenu_CreateInfo()
+        local specs = {"Holy Paladin", "Prot Paladin", "Ret Paladin", "Resto Shaman", "Enhance Shaman", "Ele Shaman", "Resto Druid", "Feral Druid", "Boomkin", "Disc Priest", "Holy Priest", "Shadow Priest", "Blood DK", "Frost DK", "Unholy DK", "Rogue", "Hunter", "Mage", "Warlock", "Warrior"}
+        for _, v in ipairs(specs) do
+            info.text = v
+            info.arg1 = v
+            info.func = function(self, arg1)
+                currentSelSpec = arg1
+                UIDropDownMenu_SetText(specDrop, arg1)
+            end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    UIDropDownMenu_SetText(specDrop, currentSelSpec)
+    UIDropDownMenu_SetWidth(specDrop, 140)
+
+    -- Kontajner na aktívne specy
+    local specCont = CreateFrame("Frame", nil, mid)
+    specCont:SetSize(300, 100)
+    specCont:SetPoint("TOPLEFT", 15, -195)
+    
+    local function DrawSpecs()
+        if specCont.rows then for _, r in ipairs(specCont.rows) do r:Hide() end end
+        specCont.rows = {}
+        local idx = 1
+        for sp, num in pairs(SausageLFM_DB.specs) do
+            if num > 0 then
+                local row = CreateFrame("Frame", nil, specCont)
+                row:SetSize(300, 22)
+                row:SetPoint("TOPLEFT", 0, -((idx-1)*24))
+                
+                local btn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+                btn:SetSize(20, 20):SetPoint("LEFT", 0, 0):SetText("X")
+                btn:SetScript("OnClick", function() SausageLFM_DB.specs[sp] = nil; DrawSpecs(); SLFM:UpdateMessage() end)
+                
+                local txt = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                txt:SetPoint("LEFT", btn, "RIGHT", 5, 0):SetText(sp)
+                
+                local box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+                box:SetSize(30, 20):SetPoint("RIGHT", -20, 0):SetAutoFocus(false):SetText(tostring(num))
+                box:SetScript("OnTextChanged", function(self) SausageLFM_DB.specs[sp] = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
+                
+                table.insert(specCont.rows, row)
+                idx = idx + 1
+            end
+        end
+    end
+
+    local addSpecBtn = CreateFrame("Button", nil, mid, "UIPanelButtonTemplate")
+    addSpecBtn:SetSize(50, 22)
+    addSpecBtn:SetPoint("LEFT", specDrop, "RIGHT", -10, 3)
+    addSpecBtn:SetText("Add")
+    addSpecBtn:SetScript("OnClick", function()
+        SausageLFM_DB.specs[currentSelSpec] = 1
+        DrawSpecs()
+        SLFM:UpdateMessage()
+    end)
+    DrawSpecs() -- Init kreslenie
+
+    -- Kanály a Delay (Broadcast Engine)
+    mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"):SetPoint("BOTTOMLEFT", 15, 120):SetText("Broadcast:")
+    
+    local delayBox = CreateFrame("EditBox", nil, mid, "InputBoxTemplate")
+    delayBox:SetSize(30, 20):SetPoint("BOTTOMLEFT", 60, 118):SetAutoFocus(false):SetText(tostring(SausageLFM_DB.interval))
+    delayBox:SetScript("OnTextChanged", function(self) SausageLFM_DB.interval = tonumber(self:GetText()) or 45 end)
+    mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"):SetPoint("RIGHT", delayBox, "LEFT", -5, 0):SetText("Delay:")
+    mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"):SetPoint("LEFT", delayBox, "RIGHT", 5, 0):SetText("sec")
+
+    local cX = 15
+    for _, ch in ipairs({"World", "Global", "LFG", "Party"}) do
+        local cb = CreateFrame("CheckButton", nil, mid, "UICheckButtonTemplate")
+        cb:SetSize(24, 24)
+        cb:SetPoint("BOTTOMLEFT", cX, 95)
+        cb.t = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        cb.t:SetPoint("LEFT", cb, "RIGHT", 0, 0)
+        cb.t:SetText(ch)
+        cb:SetChecked(SausageLFM_DB.channels[ch])
+        cb:SetScript("OnClick", function(self) SausageLFM_DB.channels[ch] = self:GetChecked() end)
+        cX = cX + 75
     end
 
     f.preview = mid:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     f.preview:SetPoint("BOTTOM", 0, 50)
-    f.preview:SetWidth(310)
+    f.preview:SetWidth(330)
     
     local startBtn = CreateFrame("Button", nil, mid, "UIPanelButtonTemplate")
-    startBtn:SetSize(180, 30)
+    startBtn:SetSize(200, 30)
     startBtn:SetPoint("BOTTOM", 0, 10)
     startBtn:SetText("START FLOODING")
     startBtn:SetScript("OnClick", function(self)
@@ -161,19 +252,18 @@ function SLFM:InitializeUI()
         self:SetText(SLFM.IsFlooding and "STOP FLOODING" or "START FLOODING")
     end)
 
-    -- 🛡️ RIGHT PANEL (Candidate Queue)
+    -- 🛡️ RIGHT PANEL (Queue)
     local right = CreateFrame("Frame", "SausageLFM_Queue", f)
-    right:SetSize(250, 430)
+    right:SetSize(250, 450)
     right:SetPoint("TOPLEFT", mid, "TOPRIGHT", 10, 0)
     CreateSausageBackdrop(right, "gold")
     right.t = right:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     right.t:SetPoint("TOP", 0, -10)
     right.t:SetText("Candidate Queue")
 
-    -- FOOTER
     local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     verText:SetPoint("BOTTOMLEFT", 20, 15)
-    verText:SetText("v" .. (SLFM.Version ~= "" and SLFM.Version or "1.3.0"))
+    verText:SetText("v" .. (SLFM.Version ~= "" and SLFM.Version or "1.4.0"))
 
     local authorText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     authorText:SetPoint("BOTTOM", 0, 15)
@@ -194,37 +284,25 @@ function SLFM:RefreshQueueTable()
             r:SetPoint("TOPLEFT", 10, -25 - (i*26))
             
             r.env = CreateFrame("Button", nil, r)
-            r.env:SetSize(16, 16)
-            r.env:SetPoint("LEFT", 0, 0)
-            r.env:SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
-            
+            r.env:SetSize(16, 16):SetPoint("LEFT", 0, 0):SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
             r.txt = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             r.txt:SetPoint("LEFT", r.env, "RIGHT", 5, 0)
 
             r.skull = r:CreateTexture(nil, "OVERLAY")
-            r.skull:SetSize(16, 16)
-            r.skull:SetPoint("RIGHT", r, "LEFT", 180, 0)
+            r.skull:SetSize(16, 16):SetPoint("RIGHT", r, "LEFT", 180, 0)
             r.skull:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_8")
             
             r.rej = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
-            r.rej:SetSize(20, 18)
-            r.rej:SetPoint("RIGHT", 0, 0)
-            r.rej:SetText("X")
-            
+            r.rej:SetSize(20, 18):SetPoint("RIGHT", 0, 0):SetText("X")
             r.inv = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
-            r.inv:SetSize(35, 18)
-            r.inv:SetPoint("RIGHT", r.rej, "LEFT", -2, 0)
-            r.inv:SetText("Inv")
+            r.inv:SetSize(35, 18):SetPoint("RIGHT", r.rej, "LEFT", -2, 0):SetText("Inv")
             
             self.qRows[i] = r
         end
 
         local r = self.qRows[i]
         if data.unread then UIFrameFlash(r.env, 0.5, 0.5, -1, false, 0, 0) else UIFrameFlashStop(r.env); r.env:SetAlpha(0.4) end
-        r.env:SetScript("OnClick", function() 
-            data.unread = false; self:RefreshQueueTable()
-            ChatFrame_SendTell(data.name) 
-        end)
+        r.env:SetScript("OnClick", function() data.unread = false; self:RefreshQueueTable(); ChatFrame_SendTell(data.name) end)
 
         local histText = ""
         if SLFM.History[data.name] then for _, h in ipairs(SLFM.History[data.name]) do histText = histText .. h .. "\n" end end
@@ -243,7 +321,7 @@ function SLFM:RefreshQueueTable()
 
         r.inv:SetScript("OnClick", function() InviteUnit(data.name) end)
         r.rej:SetScript("OnClick", function()
-            SendChatMessage("Sorry, our group is full or your spec/gear doesn't match our current needs. Good luck!", "WHISPER", nil, data.name)
+            SendChatMessage("Sorry, group full or specs don't match.", "WHISPER", nil, data.name)
             table.remove(SLFM.Queue, i); self:RefreshQueueTable()
         end)
         r:Show()
@@ -251,44 +329,36 @@ function SLFM:RefreshQueueTable()
 end
 
 -- ========================================================
--- RAID ROSTER KATEGÓRIE (NOVÝ ENGINE)
+-- RAID ROSTER KATEGÓRIE
 -- ========================================================
 function SLFM:RefreshRaidTable()
     if not SausageLFM_Raid or not SausageLFM_Raid:IsShown() then return end
     if not self.rRows then self.rRows = {} end
     for _, r in ipairs(self.rRows) do r:Hide() end
 
-    -- 1. Zoskupenie hráčov podľa rolí
     local categories = { ["Tank"]={}, ["Healer"]={}, ["DPS"]={}, ["Uncategorized"]={} }
     local numMembers = GetNumRaidMembers()
     
     for i=1, (numMembers > 0 and numMembers or 1) do
         local name = GetRaidRosterInfo(i)
-        if not name then name = UnitName("player") end -- Pre test v solo móde
+        if not name then name = UnitName("player") end
         
         SLFM.RaidData[name] = SLFM.RaidData[name] or {}
         local role = SLFM.RaidData[name].role or "Uncategorized"
         table.insert(categories[role], name)
     end
 
-    -- 2. Vykreslenie hlavičiek a hráčov
     local yOffset = -25
     local rowIndex = 1
-
     local order = {"Tank", "Healer", "DPS", "Uncategorized"}
+    
     for _, role in ipairs(order) do
         if #categories[role] > 0 or role == "Uncategorized" then
-            
-            -- Hlavička kategórie (napr. "--- Tank ---")
             if not self.rRows[rowIndex] then self.rRows[rowIndex] = CreateFrame("Button", nil, SausageLFM_Raid) end
             local head = self.rRows[rowIndex]
-            head:SetSize(230, 14)
-            head:SetPoint("TOPLEFT", 10, yOffset)
+            head:SetSize(230, 14):SetPoint("TOPLEFT", 10, yOffset)
             if not head.t then head.t = head:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall") end
-            head.t:SetPoint("LEFT", 0, 0)
-            head.t:SetText("- " .. role .. " -")
-            
-            -- Skrytie nepoužitých widgetov
+            head.t:SetPoint("LEFT", 0, 0):SetText("- " .. role .. " -")
             if head.env then head.env:Hide() end
             if head.k then head.k:Hide() end
             head:SetScript("OnClick", nil)
@@ -297,19 +367,14 @@ function SLFM:RefreshRaidTable()
             yOffset = yOffset - 16
             rowIndex = rowIndex + 1
 
-            -- Zoznam hráčov v tejto kategórii
             for _, name in ipairs(categories[role]) do
                 if not self.rRows[rowIndex] then self.rRows[rowIndex] = CreateFrame("Button", nil, SausageLFM_Raid) end
                 local r = self.rRows[rowIndex]
-                r:SetSize(230, 16)
-                r:SetPoint("TOPLEFT", 10, yOffset)
+                r:SetSize(230, 16):SetPoint("TOPLEFT", 10, yOffset)
                 
-                -- Buttony (Env a Kick)
                 if not r.env then
                     r.env = CreateFrame("Button", nil, r)
-                    r.env:SetSize(14, 14)
-                    r.env:SetPoint("LEFT", 0, 0)
-                    r.env:SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
+                    r.env:SetSize(14, 14):SetPoint("LEFT", 0, 0):SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
                 end
                 r.env:Show()
                 r.env:SetScript("OnClick", function() ChatFrame_SendTell(name) end)
@@ -319,26 +384,22 @@ function SLFM:RefreshRaidTable()
 
                 if not r.k then
                     r.k = CreateFrame("Button", nil, r)
-                    r.k:SetSize(14, 14)
-                    r.k:SetPoint("RIGHT", -5, 0)
-                    r.k:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+                    r.k:SetSize(14, 14):SetPoint("RIGHT", -5, 0):SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
                 end
                 r.k:Show()
                 r.k:SetScript("OnClick", function() 
                     StaticPopupDialogs["SAUSAGELFM_KICK"] = {
-                        text = "Vyhodiť hráča " .. name .. "?", button1 = "Yes", button2 = "No",
+                        text = "Vyhodiť " .. name .. "?", button1 = "Yes", button2 = "No",
                         OnAccept = function() UninviteUnit(name) end, timeout = 0, whileDead = true, hideOnEscape = true,
                     }
                     StaticPopup_Show("SAUSAGELFM_KICK")
                 end)
 
-                -- Formátovanie textu a dát
                 local vData = SLFM.RaidData[name]
                 local gsColor = (vData and vData.verified) and "|cff00ff00" or "|cff888888"
                 local gsText = (vData and vData.gs and vData.gs > 0) and vData.gs or "Unscanned"
                 r.t:SetText(name .. " - " .. gsColor .. gsText .. "|r " .. ((vData and vData.skull) and "|cffff0000[!]Lebka|r" or ""))
                 
-                -- Cyklovanie Rolí na Pravý Klik
                 r:RegisterForClicks("RightButtonUp")
                 r:SetScript("OnClick", function(self, button)
                     if button == "RightButton" then
@@ -347,12 +408,11 @@ function SLFM:RefreshRaidTable()
                         SLFM:RefreshRaidTable()
                     end
                 end)
-
                 r:Show()
                 yOffset = yOffset - 16
                 rowIndex = rowIndex + 1
             end
-            yOffset = yOffset - 5 -- Odskok po kategórii
+            yOffset = yOffset - 5
         end
     end
 end
