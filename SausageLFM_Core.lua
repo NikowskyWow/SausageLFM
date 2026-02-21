@@ -19,7 +19,6 @@ local defaults = {
     channels = { World = false, Global = false, LFG = false, Party = true }
 }
 
--- MIGRÁCIA A SKRATKY
 local abbr = {
     ["Icecrown Citadel"] = "ICC", ["Ruby Sanctum"] = "RS", ["Trial of the Crusader"] = "ToC",
     ["Ulduar"] = "Ulduar", ["Naxxramas"] = "Naxx", ["The Obsidian Sanctum"] = "OS",
