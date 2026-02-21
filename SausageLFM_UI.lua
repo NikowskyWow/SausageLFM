@@ -19,13 +19,14 @@ local function CreateBackdrop(f, colorType)
     })
     f:SetBackdropColor(0, 0, 0, 0.8)
     if colorType == "gold" then f:SetBackdropBorderColor(1, 0.8, 0)
-    elseif colorType == "blue" then f:SetBackdropBorderColor(0, 0.5, 1) -- Modrý rámik
+    elseif colorType == "blue" then f:SetBackdropBorderColor(0, 0.5, 1)
+    elseif colorType == "gray" then f:SetBackdropBorderColor(0.5, 0.5, 0.5)
     else f:SetBackdropBorderColor(0.5, 0.5, 0.5) end
 end
 
 function SLFM:InitializeUI()
     local f = CreateFrame("Frame", "SausageLFM_Main", UIParent)
-    f:SetSize(960, 680) -- Zväčšené okno smerom dole
+    f:SetSize(960, 680)
     f:SetPoint("CENTER")
     f:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -47,23 +48,20 @@ function SLFM:InitializeUI()
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -8, -8)
 
-    -- LEFT PANEL (Modrý rámček)
     local left = CreateFrame("Frame", "SausageLFM_Raid", f)
-    left:SetSize(250, 570)
+    left:SetSize(250, 560)
     left:SetPoint("TOPLEFT", 20, -50)
     CreateBackdrop(left, "blue")
     local lTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     lTitle:SetPoint("BOTTOM", left, "TOP", 0, 5)
     lTitle:SetText("Raid Overview")
 
-    -- MID PANEL
     local mid = CreateFrame("Frame", nil, f)
-    mid:SetSize(410, 570)
+    mid:SetSize(410, 560)
     mid:SetPoint("TOPLEFT", left, "TOPRIGHT", 15, 0)
 
-    -- RIGHT PANEL (Zlatý rámček)
     local right = CreateFrame("Frame", "SausageLFM_Queue", f)
-    right:SetSize(250, 570)
+    right:SetSize(250, 560)
     right:SetPoint("TOPLEFT", mid, "TOPRIGHT", 15, 0)
     CreateBackdrop(right, "gold")
     local rTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -71,23 +69,39 @@ function SLFM:InitializeUI()
     rTitle:SetText("Candidate Queue")
 
     -- =====================================
-    -- 🎛️ SMART DUNGEON/RAID DROPDOWNS
+    -- 🎛️ SMART DROPDOWNS & CHECKBOXY
     -- =====================================
+    local ach = CreateFrame("CheckButton", nil, mid, "UICheckButtonTemplate")
+    ach:SetPoint("TOPLEFT", 10, -45)
+    ach:SetChecked(SausageLFM_DB.reqAchiev)
+    ach:SetScript("OnClick", function(self) SausageLFM_DB.reqAchiev = self:GetChecked(); SLFM:UpdateMessage() end)
+    local achText = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    achText:SetPoint("LEFT", ach, "RIGHT", 2, 0)
+    achText:SetText("Achiev")
+
+    local hc = CreateFrame("CheckButton", nil, mid, "UICheckButtonTemplate")
+    hc:SetPoint("LEFT", achText, "RIGHT", 15, 0)
+    hc:SetChecked(SausageLFM_DB.isHC)
+    hc:SetScript("OnClick", function(self) SausageLFM_DB.isHC = self:GetChecked(); SLFM:UpdateMessage() end)
+    local hcText = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    hcText:SetPoint("LEFT", hc, "RIGHT", 2, 0)
+    hcText:SetText("HC")
+
+    local function UpdateHCVisibility()
+        if SausageLFM_DB.instance == "Dungeon" then
+            hc:Show()
+            hcText:Show()
+        else
+            hc:Hide()
+            hcText:Hide()
+            SausageLFM_DB.isHC = false
+        end
+    end
+
     local instDrop = CreateFrame("Frame", "SLFM_InstDrop", mid, "UIDropDownMenuTemplate")
     instDrop:SetPoint("TOPLEFT", -15, -10)
     local modeDrop = CreateFrame("Frame", "SLFM_ModeDrop", mid, "UIDropDownMenuTemplate")
     modeDrop:SetPoint("LEFT", instDrop, "RIGHT", -10, 0)
-
-    local function UpdateHCVisibility()
-        if SausageLFM_DB.instance == "Dungeon" then
-            SLFM_HC:Show()
-            _G["SLFM_HCText"]:Show()
-        else
-            SLFM_HC:Hide()
-            _G["SLFM_HCText"]:Hide()
-            SausageLFM_DB.isHC = false -- Auto turn off for raids
-        end
-    end
 
     local function InitModeDropdown()
         UIDropDownMenu_Initialize(modeDrop, function()
@@ -125,34 +139,20 @@ function SLFM:InitializeUI()
         end
     end)
     UIDropDownMenu_SetText(instDrop, SausageLFM_DB.instance)
-    UIDropDownMenu_SetWidth(instDrop, 130)
+    UIDropDownMenu_SetWidth(instDrop, 140)
     InitModeDropdown()
     UIDropDownMenu_SetWidth(modeDrop, 130)
-
-    -- CHECKBOXY A GS (Vymenené pozície, HC skryté pre raidy)
-    local ach = CreateFrame("CheckButton", "SLFM_Ach", mid, "UICheckButtonTemplate")
-    ach:SetPoint("TOPLEFT", 10, -45)
-    ach:SetChecked(SausageLFM_DB.reqAchiev)
-    ach:SetScript("OnClick", function(self) SausageLFM_DB.reqAchiev = self:GetChecked(); SLFM:UpdateMessage() end)
-    local achText = mid:CreateFontString("SLFM_AchText", "OVERLAY", "GameFontHighlightSmall")
-    achText:SetPoint("LEFT", ach, "RIGHT", 0, 0); achText:SetText("Achiev")
-
-    local hc = CreateFrame("CheckButton", "SLFM_HC", mid, "UICheckButtonTemplate")
-    hc:SetPoint("LEFT", achText, "RIGHT", 15, 0)
-    hc:SetChecked(SausageLFM_DB.isHC)
-    hc:SetScript("OnClick", function(self) SausageLFM_DB.isHC = self:GetChecked(); SLFM:UpdateMessage() end)
-    local hcText = mid:CreateFontString("SLFM_HCText", "OVERLAY", "GameFontHighlightSmall")
-    hcText:SetPoint("LEFT", hc, "RIGHT", 0, 0); hcText:SetText("HC")
-
-    UpdateHCVisibility() -- Skryje HC ak je zapnuty Raid
+    UpdateHCVisibility()
 
     local gsIn = CreateFrame("EditBox", nil, mid, "InputBoxTemplate")
-    gsIn:SetSize(60, 20)
+    gsIn:SetSize(75, 20)
     gsIn:SetPoint("TOPRIGHT", -15, -48)
     gsIn:SetAutoFocus(false)
     gsIn:SetText(tostring(SausageLFM_DB.minGS))
     gsIn:SetScript("OnTextChanged", function(self) SausageLFM_DB.minGS = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
-    local gsl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); gsl:SetPoint("RIGHT", gsIn, "LEFT", -5, 0); gsl:SetText("Min GS:")
+    local gsl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    gsl:SetPoint("RIGHT", gsIn, "LEFT", -5, 0)
+    gsl:SetText("Min GS:")
 
     -- =====================================
     -- 🎛️ BASIC ROLES & DEFAULT AUTO-FILL
@@ -187,7 +187,7 @@ function SLFM:InitializeUI()
     end)
 
     -- =====================================
-    -- 🎛️ DUAL-SPEC KASKÁDA (Opravený filter)
+    -- 🎛️ DUAL-SPEC KASKÁDA
     -- =====================================
     local spLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     spLbl:SetPoint("TOPLEFT", 10, -165); spLbl:SetText("Add Specific / Dual Specs:")
@@ -215,7 +215,7 @@ function SLFM:InitializeUI()
                         selOff = "None"
                         UIDropDownMenu_SetText(oDrop, "None")
                     end
-                    InitSpecDropdowns() -- Re-init offspec menu to apply filter
+                    InitSpecDropdowns()
                 end
                 UIDropDownMenu_AddButton(info)
             end
@@ -223,11 +223,12 @@ function SLFM:InitializeUI()
         
         UIDropDownMenu_Initialize(oDrop, function()
             local info = UIDropDownMenu_CreateInfo()
-            info.text = "None"; info.func = function() selOff = "None"; UIDropDownMenu_SetText(oDrop, "None") end
+            info.text = "None"
+            info.func = function() selOff = "None"; UIDropDownMenu_SetText(oDrop, "None") end
             UIDropDownMenu_AddButton(info)
             
             for _, v in ipairs(ClassData[selClass]) do
-                if v ~= selMain then -- FILTER: Skryje main spec z Off-spec menu
+                if v ~= selMain then
                     local oInfo = UIDropDownMenu_CreateInfo()
                     oInfo.text = v
                     oInfo.func = function() selOff = v; UIDropDownMenu_SetText(oDrop, v) end
@@ -259,7 +260,7 @@ function SLFM:InitializeUI()
     UIDropDownMenu_SetText(oDrop, selOff); UIDropDownMenu_SetWidth(oDrop, 70)
 
     local specCont = CreateFrame("Frame", nil, mid)
-    specCont:SetSize(390, 180); specCont:SetPoint("TOPLEFT", 10, -225)
+    specCont:SetSize(390, 160); specCont:SetPoint("TOPLEFT", 10, -225)
 
     local function DrawActiveSpecs()
         if specCont.rows then for _, r in ipairs(specCont.rows) do r:Hide() end end
@@ -299,10 +300,10 @@ function SLFM:InitializeUI()
     DrawActiveSpecs()
 
     -- =====================================
-    -- 🎛️ BROADCAST ENGINE (Sivý Box)
+    -- 🎛️ BROADCAST ENGINE (Čistejší a menší)
     -- =====================================
     local bcBox = CreateFrame("Frame", nil, mid)
-    bcBox:SetSize(410, 150)
+    bcBox:SetSize(410, 130) 
     bcBox:SetPoint("BOTTOMLEFT", 0, 0)
     CreateBackdrop(bcBox, "gray")
     
@@ -323,12 +324,13 @@ function SLFM:InitializeUI()
         local cb = CreateFrame("CheckButton", nil, bcBox, "UICheckButtonTemplate")
         cb:SetPoint("TOPLEFT", cX, -65); cb:SetChecked(SausageLFM_DB.channels[ch])
         cb:SetScript("OnClick", function(self) SausageLFM_DB.channels[ch] = self:GetChecked() end)
-        local cbText = bcBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); cbText:SetPoint("LEFT", cb, "RIGHT", 2, 0); cbText:SetText(ch)
-        cX = cX + 90
+        
+        local cbText = bcBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        cbText:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+        cbText:SetText(ch)
+        
+        cX = cX + 95
     end
-
-    f.preview = bcBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    f.preview:SetPoint("BOTTOM", 0, 45); f.preview:SetWidth(390)
 
     local flood = CreateFrame("Button", nil, bcBox, "UIPanelButtonTemplate")
     flood:SetSize(250, 30); flood:SetPoint("BOTTOM", 0, 10); flood:SetText("START FLOODING")
@@ -336,10 +338,18 @@ function SLFM:InitializeUI()
         SLFM.IsFlooding = not SLFM.IsFlooding
         self:SetText(SLFM.IsFlooding and "STOP FLOODING" or "START FLOODING")
     end)
+
+    -- =====================================
+    -- 🎛️ NÁHĽAD (Presunutý úplne naspodok okna)
+    -- =====================================
+    f.preview = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    f.preview:SetPoint("BOTTOM", 0, 20)
+    f.preview:SetWidth(800)
+    f.preview:SetJustifyH("CENTER")
     
     local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    verText:SetPoint("BOTTOMLEFT", 20, 15)
-    local verString = SLFM.Version; if type(verString) ~= "string" or verString == "" then verString = "1.8.0" end
+    verText:SetPoint("BOTTOMLEFT", 20, 20)
+    local verString = SLFM.Version; if type(verString) ~= "string" or verString == "" then verString = "1.8.2" end
     verText:SetText("v" .. verString)
     
     self:RefreshRaidTable()

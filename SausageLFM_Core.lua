@@ -19,7 +19,7 @@ local defaults = {
     channels = { World = false, Global = false, LFG = false, Party = true }
 }
 
--- MAPPING PRE LFG SPRAVY (Aby v chate neboli pridlhe nazvy)
+-- MIGRÁCIA A SKRATKY
 local abbr = {
     ["Icecrown Citadel"] = "ICC", ["Ruby Sanctum"] = "RS", ["Trial of the Crusader"] = "ToC",
     ["Ulduar"] = "Ulduar", ["Naxxramas"] = "Naxx", ["The Obsidian Sanctum"] = "OS",
@@ -51,11 +51,9 @@ function SLFM:UpdateMessage()
 
     if db.instance == "Dungeon" then
         maxCount = 5
-        -- Dungeony pouzivaju modeName ako meno instancie (napr. FoS)
         msg = "LFM " .. modeName .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. maxCount .. ")"
     else
         maxCount = (db.mode == "10") and 10 or 25
-        -- Raidy pridavaju aj mode cislo (napr. ICC 25)
         msg = "LFM " .. instName .. " " .. modeName .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. maxCount .. ")"
     end
     
@@ -106,8 +104,12 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         SausageLFM_DB.channels = SausageLFM_DB.channels or { World = false, Global = false, LFG = false, Party = true }
         SausageLFM_DB.interval = SausageLFM_DB.interval or 45
         
-        -- Fallback pre staré databázy na nový formát názvov
-        if SausageLFM_DB.instance == "ICC" then SausageLFM_DB.instance = "Icecrown Citadel" end
+        local fixMap = {
+            ["ICC"] = "Icecrown Citadel", ["Naxx"] = "Naxxramas", ["TOC"] = "Trial of the Crusader", 
+            ["RS"] = "Ruby Sanctum", ["OS"] = "The Obsidian Sanctum", ["EoE"] = "The Eye of Eternity", 
+            ["VoA"] = "Vault of Archavon"
+        }
+        if fixMap[SausageLFM_DB.instance] then SausageLFM_DB.instance = fixMap[SausageLFM_DB.instance] end
         
     elseif event == "CHAT_MSG_WHISPER" then
         local msg, sender = ...
