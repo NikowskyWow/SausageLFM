@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "" -- Pripravené pre tvoj automatický skript
+SLFM.Version = "" -- Pre tvoj automatický skript
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -31,14 +31,21 @@ function SLFM:GetExternalGS(name)
     return 0
 end
 
+-- V6 Smart Message Builder (Rozlišuje Dungeony a Raidy)
 function SLFM:UpdateMessage()
     local db = SausageLFM_DB
-    local count = GetNumRaidMembers() > 0 and GetNumRaidMembers() or 1
-    local modeText = db.mode or "25"
-    local maxCount = modeText:find("10") and 10 or 25
+    local count = GetNumRaidMembers() > 0 and GetNumRaidMembers() or (GetNumPartyMembers() > 0 and GetNumPartyMembers() + 1 or 1)
     
-    local msg = "LFM " .. (db.instance or "ICC") .. " " .. modeText .. (db.isHC and " HC" or "")
-    msg = msg .. " (" .. count .. "/" .. maxCount .. ")"
+    local maxCount = 25
+    local msg = ""
+
+    if db.instance == "Dungeon" then
+        maxCount = 5
+        msg = "LFM " .. (db.mode or "FoS") .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. maxCount .. ")"
+    else
+        maxCount = (db.mode == "10") and 10 or 25
+        msg = "LFM " .. (db.instance or "ICC") .. " " .. (db.mode or "25") .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. maxCount .. ")"
+    end
     
     local needs = ""
     if db.roles.Tank > 0 then needs = needs .. db.roles.Tank .. "x Tank, " end
