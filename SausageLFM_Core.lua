@@ -3,13 +3,13 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = ""
+SLFM.Version = "1.10.0"
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
 SLFM.IsFlooding = false
 SLFM.CurrentMsg = ""
-local lastFlood = 0
+SLFM.lastFlood = 0 -- Presunute do SLFM pre okamzite spustenie
 
 local defaults = {
     interval = 45, minGS = 0, instance = "Icecrown Citadel", mode = "25",
@@ -75,8 +75,8 @@ end
 
 SLFM:SetScript("OnUpdate", function(self, elapsed)
     if not SLFM.IsFlooding then return end
-    lastFlood = lastFlood + elapsed
-    if lastFlood >= (SausageLFM_DB.interval or 45) then
+    SLFM.lastFlood = SLFM.lastFlood + elapsed
+    if SLFM.lastFlood >= (SausageLFM_DB.interval or 45) then
         self:UpdateMessage()
         for chan, active in pairs(SausageLFM_DB.channels) do
             if active then
@@ -88,12 +88,14 @@ SLFM:SetScript("OnUpdate", function(self, elapsed)
                 end
             end
         end
-        lastFlood = 0
+        SLFM.lastFlood = 0
     end
 end)
 
 SLFM:RegisterEvent("ADDON_LOADED")
 SLFM:RegisterEvent("CHAT_MSG_WHISPER")
+SLFM:RegisterEvent("RAID_ROSTER_UPDATE")
+SLFM:RegisterEvent("PARTY_MEMBERS_CHANGED")
 
 SLFM:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" and select(1, ...) == addonName then
@@ -103,28 +105,73 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         SausageLFM_DB.channels = SausageLFM_DB.channels or { World = false, Global = false, LFG = false, Party = true }
         SausageLFM_DB.interval = SausageLFM_DB.interval or 45
         
-        local fixMap = {
-            ["ICC"] = "Icecrown Citadel", ["Naxx"] = "Naxxramas", ["TOC"] = "Trial of the Crusader", 
-            ["RS"] = "Ruby Sanctum", ["OS"] = "The Obsidian Sanctum", ["EoE"] = "The Eye of Eternity", 
-            ["VoA"] = "Vault of Archavon"
-        }
-        if fixMap[SausageLFM_DB.instance] then SausageLFM_DB.instance = fixMap[SausageLFM_DB.instance] end
-        
+    elseif event == "RAID_ROSTER_UPDATE" or event == "PARTY_MEMBERS_CHANGED" then
+        -- AUTO-QUEUE CLEANUP & ROLE ASSIGNMENT
+        local inGroup = {}
+        if GetNumRaidMembers() > 0 then
+            for i=1, GetNumRaidMembers() do
+                local n = GetRaidRosterInfo(i)
+                if n then inGroup[n] = true end
+            end
+        elseif GetNumPartyMembers() > 0 then
+            for i=1, GetNumPartyMembers() do
+                local n = UnitName("party"..i)
+                if n then inGroup[n] = true end
+            end
+            inGroup[UnitName("player")] = true
+        end
+
+        for i = #SLFM.Queue, 1, -1 do
+            local qName = SLFM.Queue[i].name
+            if inGroup[qName] then
+                SLFM.RaidData[qName] = SLFM.RaidData[qName] or {}
+                if not SLFM.RaidData[qName].role or SLFM.RaidData[qName].role == "Uncategorized" then
+                    SLFM.RaidData[qName].role = SLFM.Queue[i].role or "Uncategorized"
+                end
+                table.remove(SLFM.Queue, i)
+            end
+        end
+        if self.RefreshQueueTable then self:RefreshQueueTable() end
+        if self.RefreshRaidTable then self:RefreshRaidTable() end
+
     elseif event == "CHAT_MSG_WHISPER" then
         local msg, sender = ...
-        msg = msg:lower()
-        local gsMatch = msg:match("(%d[%.%,]?%d?)k") or msg:match("(%d%d%d%d)")
+        local lmsg = msg:lower()
+        
+        -- GS SCANNER
+        local gsMatch = lmsg:match("(%d[%.%,]?%d?)k") or lmsg:match("(%d%d%d%d)")
         local gs = 0
         if gsMatch then 
             gs = tonumber((gsMatch:gsub(",", ".")))
             if gs and gs < 100 then gs = gs * 1000 end
         end
+
+        -- WHISPER AI (Role & Spec detection)
+        local detectedRole = "Uncategorized"
+        local detectedSpecStr = ""
+        
+        if lmsg:find("tank") or lmsg:find("prot") or lmsg:find("blood") or lmsg:find("bear") then detectedRole = "Tank" end
+        if lmsg:find("heal") or lmsg:find("resto") or lmsg:find("holy") or lmsg:find("disc") or lmsg:find("tree") then detectedRole = "Healer" end
+        if lmsg:find("dps") or lmsg:find("ret") or lmsg:find("shadow") or lmsg:find("boom") or lmsg:find("feral") or lmsg:find("rogue") or lmsg:find("mage") or lmsg:find("lock") or lmsg:find("hunt") or lmsg:find("ele") or lmsg:find("enh") or lmsg:find("warr") or lmsg:find("dk") then detectedRole = "DPS" end
+        
+        local specKeywords = {"prot", "ret", "holy", "resto", "feral", "boom", "shadow", "disc", "blood", "frost", "unholy", "ele", "enh", "tree", "bear"}
+        for _, s in ipairs(specKeywords) do
+            if lmsg:find(s) then detectedSpecStr = s; break end
+        end
+
         local isNew = true
         for _, q in ipairs(SLFM.Queue) do
-            if q.name == sender then isNew = false; q.gs = gs > 0 and gs or q.gs; break end
+            if q.name == sender then 
+                isNew = false
+                q.gs = gs > 0 and gs or q.gs
+                if detectedRole ~= "Uncategorized" then q.role = detectedRole end
+                if detectedSpecStr ~= "" then q.spec = detectedSpecStr end
+                break 
+            end
         end
+        
         if isNew then
-            table.insert(SLFM.Queue, 1, { name = sender, gs = gs, unread = true })
+            table.insert(SLFM.Queue, 1, { name = sender, gs = gs, role = detectedRole, spec = detectedSpecStr, unread = true })
             if #SLFM.Queue > 15 then table.remove(SLFM.Queue) end
         end
         if self.RefreshQueueTable then self:RefreshQueueTable() end
