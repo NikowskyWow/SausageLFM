@@ -1,7 +1,6 @@
 -- SausageLFM_UI.lua
 local SLFM = SausageLFM
 
--- Pridaný "Generic Role" pre flexibilné hľadanie s Off-specom!
 local ClassData = {
     ["Generic Role"] = {"Tank", "Healer", "Melee DPS", "Ranged DPS"},
     ["Paladin"] = {"Holy", "Prot", "Ret"}, ["Warrior"] = {"Arms", "Fury", "Prot"},
@@ -41,7 +40,6 @@ local function CreateFlatEditBox(parent, w, h)
     return eb
 end
 
--- GLOBÁLNA PREMENNÁ PRE OPRAVU ROLE DROPDOWNU
 SLFM_ActiveRolePlayer = nil
 
 function SLFM:InitializeUI()
@@ -73,7 +71,6 @@ function SLFM:InitializeUI()
     right:SetSize(250, 560); right:SetPoint("TOPLEFT", mid, "TOPRIGHT", 15, 0); CreateBackdrop(right, "gold")
     local rTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal"); rTitle:SetPoint("BOTTOM", right, "TOP", 0, 5); rTitle:SetText("Candidate Queue")
 
-    -- 🎛️ OPRAVENÉ KONTEXTOVÉ MENU PRE ROLE (Funguje WotLK-safe)
     local roleDrop = CreateFrame("Frame", "SLFM_RoleDrop", UIParent, "UIDropDownMenuTemplate")
     UIDropDownMenu_Initialize(roleDrop, function(self, level, menuList)
         local info = UIDropDownMenu_CreateInfo()
@@ -91,7 +88,6 @@ function SLFM:InitializeUI()
     end, "MENU")
     f.roleDrop = roleDrop
 
-    -- 🎛️ SMART DROPDOWNS & CHECKBOXY
     local ach = CreateFrame("CheckButton", nil, mid, "UICheckButtonTemplate")
     ach:SetPoint("TOPLEFT", 10, -45); ach:SetChecked(SausageLFM_DB.reqAchiev)
     ach:SetScript("OnClick", function(self) SausageLFM_DB.reqAchiev = self:GetChecked(); SLFM:UpdateMessage() end)
@@ -135,7 +131,6 @@ function SLFM:InitializeUI()
     gsIn:SetText(tostring(SausageLFM_DB.minGS)); gsIn:SetScript("OnTextChanged", function(self) SausageLFM_DB.minGS = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
     local gsl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); gsl:SetPoint("RIGHT", gsIn, "LEFT", -5, 0); gsl:SetText("Min GS:")
 
-    -- 🎛️ BASIC ROLES
     local brLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); brLbl:SetPoint("TOPLEFT", 10, -90); brLbl:SetText("Basic Roles:")
     local rBoxes = {}; local rX = 10
     for _, r in ipairs({"Tank", "Heal", "mDPS", "rDPS"}) do
@@ -153,7 +148,6 @@ function SLFM:InitializeUI()
         for r, box in pairs(rBoxes) do box:SetText(tostring(SausageLFM_DB.roles[r])) end; SLFM:UpdateMessage()
     end)
 
-    -- 🎛️ DUAL-SPEC KASKÁDA (GENERIC ROLE)
     local spLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); spLbl:SetPoint("TOPLEFT", 10, -165); spLbl:SetText("Add Specific / Dual Specs:")
     local selClass, selMain, selOff = "Generic Role", "Tank", "None"
 
@@ -201,18 +195,35 @@ function SLFM:InitializeUI()
         local idx = 0
         for name, count in pairs(SausageLFM_DB.specs) do
             if count > 0 then
-                -- JEDNOSTĹPCOVÝ LAYOUT (Prehľadné, text sa neprekrýva)
                 local r = CreateFrame("Frame", nil, specCont)
                 r:SetSize(380, 24); r:SetPoint("TOPLEFT", 5, -(idx * 26))
                 
                 local txt = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
                 txt:SetPoint("LEFT", 0, 0); txt:SetText(name)
                 
-                local eb = CreateFlatEditBox(r, 25, 18); eb:SetPoint("RIGHT", -30, 0); eb:SetText(tostring(count))
-                eb:SetScript("OnTextChanged", function(self) SausageLFM_DB.specs[name] = tonumber(self:GetText()) or 0; SLFM:UpdateMessage() end)
-                
-                local del = CreateFrame("Button", nil, r, "UIPanelButtonTemplate"); del:SetSize(20, 18); del:SetPoint("RIGHT", 0, 0); del:SetText("X")
+                -- V10.1: NOVÉ TLAČIDLÁ [ - ] a [ + ] PRE SPECIFICKÉ SPECY
+                local del = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
+                del:SetSize(20, 18); del:SetPoint("RIGHT", 0, 0); del:SetText("X")
                 del:SetScript("OnClick", function() SausageLFM_DB.specs[name] = nil; DrawActiveSpecs(); SLFM:UpdateMessage() end)
+                
+                local btnPlus = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
+                btnPlus:SetSize(20, 18); btnPlus:SetPoint("RIGHT", del, "LEFT", -5, 0); btnPlus:SetText("+")
+                btnPlus:SetScript("OnClick", function() SausageLFM_DB.specs[name] = SausageLFM_DB.specs[name] + 1; DrawActiveSpecs(); SLFM:UpdateMessage() end)
+
+                local eb = CreateFlatEditBox(r, 25, 18)
+                eb:SetPoint("RIGHT", btnPlus, "LEFT", -5, 0); eb:SetText(tostring(count))
+                eb:SetScript("OnTextChanged", function(self) 
+                    local val = tonumber(self:GetText())
+                    if val then SausageLFM_DB.specs[name] = val; SLFM:UpdateMessage() end
+                end)
+                
+                local btnMinus = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
+                btnMinus:SetSize(20, 18); btnMinus:SetPoint("RIGHT", eb, "LEFT", -5, 0); btnMinus:SetText("-")
+                btnMinus:SetScript("OnClick", function() 
+                    SausageLFM_DB.specs[name] = math.max(0, SausageLFM_DB.specs[name] - 1)
+                    if SausageLFM_DB.specs[name] == 0 then SausageLFM_DB.specs[name] = nil end
+                    DrawActiveSpecs(); SLFM:UpdateMessage() 
+                end)
                 
                 tinsert(specCont.rows, r); idx = idx + 1
             end
@@ -231,7 +242,6 @@ function SLFM:InitializeUI()
     end)
     DrawActiveSpecs()
 
-    -- 🎛️ BROADCAST ENGINE (Instantný prvý Flood)
     local bcBox = CreateFrame("Frame", nil, mid); bcBox:SetSize(410, 110); bcBox:SetPoint("BOTTOMLEFT", 0, 15); CreateBackdrop(bcBox, "gray")
     local bcTitle = bcBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); bcTitle:SetPoint("TOPLEFT", 10, -10); bcTitle:SetText("Broadcast Engine")
 
@@ -251,16 +261,21 @@ function SLFM:InitializeUI()
     local flood = CreateFrame("Button", nil, bcBox, "UIPanelButtonTemplate"); flood:SetSize(200, 30); flood:SetPoint("TOPRIGHT", -15, -25); flood:SetText("START FLOODING")
     flood:SetScript("OnClick", function(self)
         SLFM.IsFlooding = not SLFM.IsFlooding
-        if SLFM.IsFlooding then SLFM.lastFlood = 999 end -- Okamzity odpal dalsej spravy na najblizsom frame update
+        if SLFM.IsFlooding then SLFM.lastFlood = 999 end -- Instantný Flood fix
         self:SetText(SLFM.IsFlooding and "STOP FLOODING" or "START FLOODING")
     end)
 
-    -- 🎛️ SPODNÝ NÁHĽAD 
-    local previewBar = CreateFrame("Frame", nil, f); previewBar:SetSize(920, 25); previewBar:SetPoint("BOTTOM", 0, 15); CreateBackdrop(previewBar, "gray")
-    f.preview = previewBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); f.preview:SetPoint("CENTER", 0, 0); f.preview:SetWidth(900); f.preview:SetTextColor(1, 0.82, 0)
+    -- 🎛️ SPODNÝ NÁHĽAD (V10.1 OPRAVA: Zväčšený pre zalamovanie na 2 riadky)
+    local previewBar = CreateFrame("Frame", nil, f); previewBar:SetSize(920, 45); previewBar:SetPoint("BOTTOM", 0, 15); CreateBackdrop(previewBar, "gray")
+    f.preview = previewBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.preview:SetPoint("CENTER", 0, 0)
+    f.preview:SetSize(900, 40) -- Umožňuje natívne WotLK WordWrap (zalamovanie textu)
+    f.preview:SetWordWrap(true)
+    f.preview:SetJustifyH("CENTER"); f.preview:SetJustifyV("MIDDLE")
+    f.preview:SetTextColor(1, 0.82, 0)
     
-    local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); verText:SetPoint("BOTTOMLEFT", 20, 45)
-    local verString = SLFM.Version; if type(verString) ~= "string" or verString == "" then verString = "1.10.0" end; verText:SetText("v" .. verString)
+    local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); verText:SetPoint("BOTTOMLEFT", 20, 65)
+    local verString = SLFM.Version; if type(verString) ~= "string" or verString == "" then verString = "1.10.1" end; verText:SetText("v" .. verString)
     
     self:RefreshRaidTable()
 end
@@ -279,7 +294,6 @@ function SLFM:RefreshQueueTable()
         end
         local r = self.qRows[i]
         
-        -- ZOBRAZENIE DETEKOVANEJ ROLE/SPECU V QUEUE
         local infoStr = ""
         if d.role and d.role ~= "Uncategorized" then infoStr = " |cff00ccff["..d.role.. (d.spec and " - "..d.spec or "") .."]|r" end
         r.t:SetText(d.name .. " (" .. (d.gs or "??") .. ")" .. infoStr)
@@ -296,13 +310,11 @@ function SLFM:RefreshRaidTable()
     for _, r in ipairs(self.rRows) do r:Hide() end
 
     local categories = { ["Tank"]={}, ["Healer"]={}, ["DPS"]={}, ["Uncategorized"]={} }
-    local numMembers = GetNumRaidMembers() > 0 and GetNumRaidMembers() or (GetNumPartyMembers() > 0 and GetNumPartyMembers() + 1 or 1)
-    
     local inGroupNames = {}
     if GetNumRaidMembers() > 0 then
         for i=1, GetNumRaidMembers() do local n = GetRaidRosterInfo(i); if n then table.insert(inGroupNames, n) end end
     else
-        table.insert(inGroupNames, UnitName("player"))
+        table.insert(inGroupNames, (UnitName("player"))) -- V10.1 BEZPEČNOSTNÝ FIX pre string zátvorky
         for i=1, GetNumPartyMembers() do local n = UnitName("party"..i); if n then table.insert(inGroupNames, n) end end
     end
 
@@ -338,7 +350,7 @@ function SLFM:RefreshRaidTable()
                 if not r.gear then r.gear = CreateFrame("Button", nil, r); r.gear:SetSize(14, 14); r.gear:SetPoint("RIGHT", r.k, "LEFT", -5, 0); r.gear:SetNormalTexture("Interface\\GossipFrame\\BinderGossipIcon") end
                 r.gear:Show()
                 r.gear:SetScript("OnClick", function(self)
-                    SLFM_ActiveRolePlayer = name -- WotLK-safe global presun
+                    SLFM_ActiveRolePlayer = name
                     ToggleDropDownMenu(1, nil, SausageLFM_Main.roleDrop, self, 0, 0)
                 end)
 

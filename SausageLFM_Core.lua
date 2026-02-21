@@ -3,13 +3,13 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "1.10.0"
+SLFM.Version = "1.10.1"
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
 SLFM.IsFlooding = false
 SLFM.CurrentMsg = ""
-SLFM.lastFlood = 0 -- Presunute do SLFM pre okamzite spustenie
+SLFM.lastFlood = 0
 
 local defaults = {
     interval = 45, minGS = 0, instance = "Icecrown Citadel", mode = "25",
@@ -43,6 +43,11 @@ function SLFM:UpdateMessage()
     local db = SausageLFM_DB
     local count = GetNumRaidMembers() > 0 and GetNumRaidMembers() or (GetNumPartyMembers() > 0 and GetNumPartyMembers() + 1 or 1)
     
+    -- BEZPEČNOSTNÁ POISTKA: Nedovolí mať nezmyselný mód (napr. Naxx VH)
+    if db.instance ~= "Dungeon" and db.mode ~= "10" and db.mode ~= "25" then
+        db.mode = "25"
+    end
+
     local instName = abbr[db.instance] or db.instance
     local modeName = abbr[db.mode] or db.mode
     local maxCount = 25
@@ -66,10 +71,11 @@ function SLFM:UpdateMessage()
         if target > 0 then needs = needs .. target .. "x " .. spec .. ", " end
     end
     
-    if db.minGS > 0 then msg = msg .. " | Req: " .. db.minGS .. "+ GS" end
+    -- OPRAVA INVALID ESCAPE CODE: Vymenené všetky `|` za `-`
+    if db.minGS > 0 then msg = msg .. " - Req: " .. db.minGS .. "+ GS" end
     if db.reqAchiev then msg = msg .. " & Achiev" end
     
-    SLFM.CurrentMsg = msg .. " - Need: " .. (needs ~= "" and needs:gsub(", $", "") or "PUMPERS") .. " | w me spec/gs!"
+    SLFM.CurrentMsg = msg .. " - Need: " .. (needs ~= "" and needs:gsub(", $", "") or "PUMPERS") .. " - w me spec/gs!"
     if SausageLFM_Main and SausageLFM_Main.preview then SausageLFM_Main.preview:SetText(SLFM.CurrentMsg) end
 end
 
@@ -105,8 +111,14 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         SausageLFM_DB.channels = SausageLFM_DB.channels or { World = false, Global = false, LFG = false, Party = true }
         SausageLFM_DB.interval = SausageLFM_DB.interval or 45
         
+        local fixMap = {
+            ["ICC"] = "Icecrown Citadel", ["Naxx"] = "Naxxramas", ["TOC"] = "Trial of the Crusader", 
+            ["RS"] = "Ruby Sanctum", ["OS"] = "The Obsidian Sanctum", ["EoE"] = "The Eye of Eternity", 
+            ["VoA"] = "Vault of Archavon"
+        }
+        if fixMap[SausageLFM_DB.instance] then SausageLFM_DB.instance = fixMap[SausageLFM_DB.instance] end
+
     elseif event == "RAID_ROSTER_UPDATE" or event == "PARTY_MEMBERS_CHANGED" then
-        -- AUTO-QUEUE CLEANUP & ROLE ASSIGNMENT
         local inGroup = {}
         if GetNumRaidMembers() > 0 then
             for i=1, GetNumRaidMembers() do
@@ -118,7 +130,8 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
                 local n = UnitName("party"..i)
                 if n then inGroup[n] = true end
             end
-            inGroup[UnitName("player")] = true
+            -- BEZPEČNÝ ZÁPIS UnitName()
+            inGroup[(UnitName("player"))] = true
         end
 
         for i = #SLFM.Queue, 1, -1 do
@@ -138,7 +151,6 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         local msg, sender = ...
         local lmsg = msg:lower()
         
-        -- GS SCANNER
         local gsMatch = lmsg:match("(%d[%.%,]?%d?)k") or lmsg:match("(%d%d%d%d)")
         local gs = 0
         if gsMatch then 
@@ -146,7 +158,6 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
             if gs and gs < 100 then gs = gs * 1000 end
         end
 
-        -- WHISPER AI (Role & Spec detection)
         local detectedRole = "Uncategorized"
         local detectedSpecStr = ""
         
