@@ -1,8 +1,9 @@
+-- SausageLFM_Core.lua
 local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "" -- Tu si tvoj skript doplní verziu
+SLFM.Version = "" -- Pripravené pre tvoj automatický skript
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -22,7 +23,6 @@ local defaults = {
     channels = { World = false, Global = false, LFG = false, Party = true }
 }
 
--- Načítanie GS z externých addonov (GearScore / Lite)
 function SLFM:GetExternalGS(name)
     local realm = GetRealmName()
     if GS_Data and GS_Data[realm] and GS_Data[realm].Players and GS_Data[realm].Players[name] then
@@ -31,12 +31,14 @@ function SLFM:GetExternalGS(name)
     return 0
 end
 
--- Generovanie správy (ČISTÝ TEXT bez farebných kódov kvôli errorom)
 function SLFM:UpdateMessage()
     local db = SausageLFM_DB
     local count = GetNumRaidMembers() > 0 and GetNumRaidMembers() or 1
-    local msg = "LFM " .. (db.instance or "ICC") .. " " .. (db.mode or "25") .. (db.isHC and " HC" or "")
-    msg = msg .. " (" .. count .. "/" .. (db.mode == "25" and 25 or 10) .. ")"
+    local modeText = db.mode or "25"
+    local maxCount = modeText:find("10") and 10 or 25
+    
+    local msg = "LFM " .. (db.instance or "ICC") .. " " .. modeText .. (db.isHC and " HC" or "")
+    msg = msg .. " (" .. count .. "/" .. maxCount .. ")"
     
     local needs = ""
     if db.roles.Tank > 0 then needs = needs .. db.roles.Tank .. "x Tank, " end
@@ -80,10 +82,10 @@ SLFM:RegisterEvent("CHAT_MSG_WHISPER")
 SLFM:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" and select(1, ...) == addonName then
         SausageLFM_DB = SausageLFM_DB or defaults
-        -- Failsafe pre databázu
         SausageLFM_DB.roles = SausageLFM_DB.roles or { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 }
         SausageLFM_DB.specs = SausageLFM_DB.specs or {}
         SausageLFM_DB.channels = SausageLFM_DB.channels or { World = false, Global = false, LFG = false, Party = true }
+        SausageLFM_DB.interval = SausageLFM_DB.interval or 45
     elseif event == "CHAT_MSG_WHISPER" then
         local msg, sender = ...
         msg = msg:lower()
@@ -105,10 +107,9 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
--- MINIMAP BUTTON
 local btn = CreateFrame("Button", "SausageLFM_Minimap", Minimap)
 btn:SetSize(32, 32)
-btn:SetPoint("TOPLEFT")
+btn:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 0, -50)
 btn:SetNormalTexture("Interface\\Icons\\Inv_Misc_Food_54")
 btn:SetScript("OnClick", function()
     if not SausageLFM_Main then SLFM:InitializeUI() end
