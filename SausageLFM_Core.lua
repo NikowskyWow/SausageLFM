@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "" -- Pre tvoj automatický skript
+SLFM.Version = "" -- Pripravené pre tvoj automatický skript
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -31,7 +31,7 @@ function SLFM:GetExternalGS(name)
     return 0
 end
 
--- V6 Smart Message Builder (Rozlišuje Dungeony a Raidy)
+-- V7 Smart Message Builder
 function SLFM:UpdateMessage()
     local db = SausageLFM_DB
     local count = GetNumRaidMembers() > 0 and GetNumRaidMembers() or (GetNumPartyMembers() > 0 and GetNumPartyMembers() + 1 or 1)
@@ -41,7 +41,7 @@ function SLFM:UpdateMessage()
 
     if db.instance == "Dungeon" then
         maxCount = 5
-        msg = "LFM " .. (db.mode or "FoS") .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. maxCount .. ")"
+        msg = "LFM " .. (db.mode or "Random HC") .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. maxCount .. ")"
     else
         maxCount = (db.mode == "10") and 10 or 25
         msg = "LFM " .. (db.instance or "ICC") .. " " .. (db.mode or "25") .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. maxCount .. ")"
@@ -53,6 +53,7 @@ function SLFM:UpdateMessage()
     if db.roles.mDPS > 0 then needs = needs .. db.roles.mDPS .. "x mDPS, " end
     if db.roles.rDPS > 0 then needs = needs .. db.roles.rDPS .. "x rDPS, " end
     
+    -- Dynamické specy (napr. 1x Holy Paladin (OS Prot))
     for spec, target in pairs(db.specs) do
         if target > 0 then needs = needs .. target .. "x " .. spec .. ", " end
     end
