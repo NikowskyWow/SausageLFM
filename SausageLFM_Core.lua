@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "" -- Pripravené pre tvoj automatický skript
+SLFM.Version = ""
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -12,15 +12,24 @@ SLFM.CurrentMsg = ""
 local lastFlood = 0
 
 local defaults = {
-    interval = 45,
-    minGS = 0,
-    instance = "ICC",
-    mode = "25",
-    isHC = false,
-    reqAchiev = false,
+    interval = 45, minGS = 0, instance = "Icecrown Citadel", mode = "25",
+    isHC = false, reqAchiev = false,
     roles = { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 },
     specs = {},
     channels = { World = false, Global = false, LFG = false, Party = true }
+}
+
+-- MAPPING PRE LFG SPRAVY (Aby v chate neboli pridlhe nazvy)
+local abbr = {
+    ["Icecrown Citadel"] = "ICC", ["Ruby Sanctum"] = "RS", ["Trial of the Crusader"] = "ToC",
+    ["Ulduar"] = "Ulduar", ["Naxxramas"] = "Naxx", ["The Obsidian Sanctum"] = "OS",
+    ["The Eye of Eternity"] = "EoE", ["Vault of Archavon"] = "VoA", ["Dungeon"] = "Dung",
+    ["Random Heroic"] = "RHC", ["Daily Heroic"] = "Daily HC", ["Forge of Souls"] = "FoS",
+    ["Pit of Saron"] = "PoS", ["Halls of Reflection"] = "HoR", ["Trial of the Champion"] = "ToC5",
+    ["Utgarde Keep"] = "UK", ["The Nexus"] = "Nexus", ["Azjol-Nerub"] = "AN",
+    ["Ahn'kahet: The Old Kingdom"] = "AK", ["Drak'Tharon Keep"] = "DTK", ["The Violet Hold"] = "VH",
+    ["Gundrak"] = "GD", ["Halls of Stone"] = "HoS", ["Halls of Lightning"] = "HoL",
+    ["Utgarde Pinnacle"] = "UP", ["The Oculus"] = "Oculus", ["The Culling of Stratholme"] = "CoS"
 }
 
 function SLFM:GetExternalGS(name)
@@ -31,20 +40,23 @@ function SLFM:GetExternalGS(name)
     return 0
 end
 
--- V7 Smart Message Builder
 function SLFM:UpdateMessage()
     local db = SausageLFM_DB
     local count = GetNumRaidMembers() > 0 and GetNumRaidMembers() or (GetNumPartyMembers() > 0 and GetNumPartyMembers() + 1 or 1)
     
+    local instName = abbr[db.instance] or db.instance
+    local modeName = abbr[db.mode] or db.mode
     local maxCount = 25
     local msg = ""
 
     if db.instance == "Dungeon" then
         maxCount = 5
-        msg = "LFM " .. (db.mode or "Random HC") .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. maxCount .. ")"
+        -- Dungeony pouzivaju modeName ako meno instancie (napr. FoS)
+        msg = "LFM " .. modeName .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. maxCount .. ")"
     else
         maxCount = (db.mode == "10") and 10 or 25
-        msg = "LFM " .. (db.instance or "ICC") .. " " .. (db.mode or "25") .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. maxCount .. ")"
+        -- Raidy pridavaju aj mode cislo (napr. ICC 25)
+        msg = "LFM " .. instName .. " " .. modeName .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. maxCount .. ")"
     end
     
     local needs = ""
@@ -53,7 +65,6 @@ function SLFM:UpdateMessage()
     if db.roles.mDPS > 0 then needs = needs .. db.roles.mDPS .. "x mDPS, " end
     if db.roles.rDPS > 0 then needs = needs .. db.roles.rDPS .. "x rDPS, " end
     
-    -- Dynamické specy (napr. 1x Holy Paladin (OS Prot))
     for spec, target in pairs(db.specs) do
         if target > 0 then needs = needs .. target .. "x " .. spec .. ", " end
     end
@@ -94,6 +105,10 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         SausageLFM_DB.specs = SausageLFM_DB.specs or {}
         SausageLFM_DB.channels = SausageLFM_DB.channels or { World = false, Global = false, LFG = false, Party = true }
         SausageLFM_DB.interval = SausageLFM_DB.interval or 45
+        
+        -- Fallback pre staré databázy na nový formát názvov
+        if SausageLFM_DB.instance == "ICC" then SausageLFM_DB.instance = "Icecrown Citadel" end
+        
     elseif event == "CHAT_MSG_WHISPER" then
         local msg, sender = ...
         msg = msg:lower()
