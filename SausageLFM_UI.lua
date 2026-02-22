@@ -76,7 +76,7 @@ function SLFM:InitializeUI()
     
     local updateBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     updateBtn:SetSize(110, 22); updateBtn:SetPoint("RIGHT", closeBtn, "LEFT", -10, 0); updateBtn:SetText("Check Updates")
-    updateBtn:SetScript("OnClick", function() print("|cff00ccff[SausageLFM]|r You are running the latest V1.16.4!") end)
+    updateBtn:SetScript("OnClick", function() print("|cff00ccff[SausageLFM]|r You are running the latest V1.16.5!") end)
 
     local left = CreateFrame("Frame", "SausageLFM_Raid", f); left:SetSize(280, 570); left:SetPoint("TOPLEFT", 20, -60); CreateBackdrop(left, "blue")
     
@@ -300,7 +300,8 @@ function SLFM:InitializeUI()
     end)
     DrawActiveSpecs()
 
-    local bcBox = CreateFrame("Frame", nil, mid); bcBox:SetSize(410, 110); bcBox:SetPoint("BOTTOMLEFT", 0, 15); CreateBackdrop(bcBox, "gray")
+    -- V16.5: Zväčšený bcBox a Custom Message
+    local bcBox = CreateFrame("Frame", nil, mid); bcBox:SetSize(410, 135); bcBox:SetPoint("BOTTOMLEFT", 0, 15); CreateBackdrop(bcBox, "gray")
     local bcTitle = bcBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); bcTitle:SetPoint("TOPLEFT", 10, -10); bcTitle:SetText("Broadcast Engine")
     local timer = CreateFlatEditBox(bcBox, 35, 20); timer:SetPoint("TOPLEFT", 60, -35); timer:SetText(tostring(SausageLFM_DB.interval))
     timer:SetScript("OnTextChanged", function(self) SausageLFM_DB.interval = tonumber(self:GetText()) or 45 end)
@@ -308,14 +309,24 @@ function SLFM:InitializeUI()
     local t2 = bcBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); t2:SetPoint("LEFT", timer, "RIGHT", 5, 0); t2:SetText("sec")
 
     local cX = 10
-    for _, ch in ipairs({"World", "Global", "LFG", "Party"}) do
-        local cb = CreateFrame("CheckButton", nil, bcBox, "UICheckButtonTemplate"); cb:SetPoint("TOPLEFT", cX, -65); cb:SetChecked(SausageLFM_DB.channels[ch])
+    -- V16.5: General namiesto Global
+    for _, ch in ipairs({"General", "World", "LFG", "Party"}) do
+        local cb = CreateFrame("CheckButton", nil, bcBox, "UICheckButtonTemplate"); cb:SetPoint("TOPLEFT", cX, -60); cb:SetChecked(SausageLFM_DB.channels[ch])
         cb:SetScript("OnClick", function(self) SausageLFM_DB.channels[ch] = self:GetChecked() end)
         local cbt = bcBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); cbt:SetPoint("LEFT", cb, "RIGHT", 2, 0); cbt:SetText(ch)
-        cX = cX + 95
+        cX = cX + 90
     end
 
-    local flood = CreateFrame("Button", nil, bcBox, "UIPanelButtonTemplate"); flood:SetSize(200, 30); flood:SetPoint("TOPRIGHT", -15, -25); flood:SetText("START FLOODING")
+    -- V16.5: Custom Message Input
+    local cMsgLbl = bcBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); cMsgLbl:SetPoint("TOPLEFT", 10, -95); cMsgLbl:SetText("Custom:")
+    local cMsgInput = CreateFlatEditBox(bcBox, 320, 20); cMsgInput:SetPoint("LEFT", cMsgLbl, "RIGHT", 10, 0); cMsgInput:SetText(SausageLFM_DB.customMsg or "")
+    cMsgInput:SetJustifyH("LEFT")
+    cMsgInput:SetScript("OnTextChanged", function(self) 
+        SausageLFM_DB.customMsg = self:GetText()
+        SLFM:UpdateMessage() 
+    end)
+
+    local flood = CreateFrame("Button", nil, bcBox, "UIPanelButtonTemplate"); flood:SetSize(180, 30); flood:SetPoint("TOPRIGHT", -15, -25); flood:SetText("START FLOODING")
     flood:SetScript("OnClick", function(self)
         SLFM.IsFlooding = not SLFM.IsFlooding
         if SLFM.IsFlooding then SLFM.lastFlood = 999 end
@@ -326,7 +337,7 @@ function SLFM:InitializeUI()
     f.preview = previewBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.preview:SetPoint("CENTER", 0, 0); f.preview:SetSize(990, 40); f.preview:SetWordWrap(true); f.preview:SetJustifyH("CENTER"); f.preview:SetJustifyV("MIDDLE"); f.preview:SetTextColor(1, 0.82, 0)
     
-    local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); verText:SetPoint("BOTTOMRIGHT", -20, 10); verText:SetText("v" .. (SLFM.Version or "1.16.4") .. " by Sausage Party")
+    local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); verText:SetPoint("BOTTOMRIGHT", -20, 10); verText:SetText("v" .. (SLFM.Version or "1.16.5") .. " by Sausage Party")
 
     self:RefreshRaidTable()
     self:RefreshQueueTable()

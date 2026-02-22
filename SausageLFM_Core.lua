@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "1.16.4"
+SLFM.Version = "1.16.5"
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -18,10 +18,11 @@ local defaults = {
     isHC = false, reqAchiev = false,
     roles = { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 },
     specs = {},
-    channels = { World = false, Global = false, LFG = false, Party = true },
+    channels = { General = false, World = false, LFG = false, Party = true },
     whitelist = {},
     Queue = {},
-    RaidData = {}
+    RaidData = {},
+    customMsg = ""
 }
 
 local SpecToRole = {
@@ -159,7 +160,16 @@ function SLFM:UpdateMessage()
     
     if db.minGS > 0 then msg = msg .. " - Req: " .. db.minGS .. "+ GS" end
     if db.reqAchiev then msg = msg .. " & Achiev" end
-    SLFM.CurrentMsg = msg .. " - Need: " .. (needs ~= "" and needs:gsub(", $", "") or "PUMPERS") .. " - w me spec/gs!"
+    
+    local baseMsg = msg .. " - Need: " .. (needs ~= "" and needs:gsub(", $", "") or "PUMPERS") .. " - w me spec/gs!"
+    
+    -- Pripojenie vlastnej správy na koniec
+    if db.customMsg and db.customMsg ~= "" then
+        SLFM.CurrentMsg = baseMsg .. " - " .. db.customMsg
+    else
+        SLFM.CurrentMsg = baseMsg
+    end
+
     if SausageLFM_Main and SausageLFM_Main.preview then SausageLFM_Main.preview:SetText(SLFM.CurrentMsg) end
 end
 
@@ -181,8 +191,15 @@ SLFM:SetScript("OnUpdate", function(self, elapsed)
             self:UpdateMessage()
             for chan, active in pairs(SausageLFM_DB.channels) do
                 if active then
-                    local id = GetChannelName(chan)
-                    if id > 0 then SendChatMessage(SLFM.CurrentMsg, "CHANNEL", nil, id) end
+                    if chan == "Party" then
+                        if GetNumRaidMembers() > 0 then SendChatMessage(SLFM.CurrentMsg, "RAID")
+                        elseif GetNumPartyMembers() > 0 then SendChatMessage(SLFM.CurrentMsg, "PARTY") end
+                    elseif chan == "General" then
+                        SendChatMessage(SLFM.CurrentMsg, "CHANNEL", nil, 1)
+                    else
+                        local id = GetChannelName(chan)
+                        if id > 0 then SendChatMessage(SLFM.CurrentMsg, "CHANNEL", nil, id) end
+                    end
                 end
             end
             SLFM.lastFlood = 0
@@ -211,13 +228,15 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         SausageLFM_DB = SausageLFM_DB or defaults
         SausageLFM_DB.roles = SausageLFM_DB.roles or { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 }
         SausageLFM_DB.specs = SausageLFM_DB.specs or {}
-        SausageLFM_DB.channels = SausageLFM_DB.channels or { World = false, Global = false, LFG = false, Party = true }
+        SausageLFM_DB.channels = SausageLFM_DB.channels or { General = false, World = false, LFG = false, Party = true }
         SausageLFM_DB.interval = SausageLFM_DB.interval or 45
         SausageLFM_DB.whitelist = SausageLFM_DB.whitelist or {}
         SausageLFM_DB.Queue = SausageLFM_DB.Queue or {}
         SausageLFM_DB.RaidData = SausageLFM_DB.RaidData or {}
+        SausageLFM_DB.customMsg = SausageLFM_DB.customMsg or ""
         
-        -- Napojenie globálnych premenných na SavedVariables pre perzistenciu
+        if SausageLFM_DB.channels.Global ~= nil then SausageLFM_DB.channels.Global = nil end
+        
         SLFM.Queue = SausageLFM_DB.Queue
         SLFM.RaidData = SausageLFM_DB.RaidData
 
