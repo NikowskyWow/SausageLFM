@@ -59,23 +59,29 @@ local ClassTalents = {
     ["ROGUE"] = { [1]="Assa", [2]="Combat", [3]="Sub" }
 }
 
--- V15 PERFECT GEARSCORE HOOKER
+-- V15.1 GEARSCORELITE HOOKER
 function SLFM:GetExternalGS(name)
-    local realm = GetRealmName()
+    local gs = 0
     
-    -- Ak žiadame vlastné GS a GearScore je nainštalovaný, donútime ho prepočítať nás
-    if name == UnitName("player") and type(GearScore_GetScore) == "function" then
-        GearScore_GetScore(name, "player")
+    -- 1. Pokus: GearScoreLite (vracia hodnotu priamo)
+    if type(GearScore_GetScore) == "function" then
+        local targetUnit = (name == UnitName("player")) and "player" or name
+        local rawGS = GearScore_GetScore(name, targetUnit)
+        
+        if rawGS and type(rawGS) == "number" and rawGS > 0 then
+            return rawGS
+        end
     end
 
-    -- Následne vytiahneme hodnotu z jeho databázy
+    -- 2. Pokus: Záložná databáza (ak si niekto nainštaluje iný addon)
+    local realm = GetRealmName()
     if GS_Data and GS_Data[realm] and GS_Data[realm].Players and GS_Data[realm].Players[name] then
-        local gs = tonumber(GS_Data[realm].Players[name].GearScore) or 0
+        gs = tonumber(GS_Data[realm].Players[name].GearScore) or 0
         if gs > 0 then return gs end
     end
+    
     return 0
 end
-
 function SLFM:UpdateMessage()
     local db = SausageLFM_DB
     local count = GetNumRaidMembers() > 0 and GetNumRaidMembers() or (GetNumPartyMembers() > 0 and GetNumPartyMembers() + 1 or 1)
