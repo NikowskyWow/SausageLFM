@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "1.12.0"
+SLFM.Version = "1.13.0"
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -59,7 +59,6 @@ local ClassTalents = {
     ["ROGUE"] = { [1]="Assa", [2]="Combat", [3]="Sub" }
 }
 
--- V12 GS Hooker (Podpora pre UnitName aj "player")
 function SLFM:GetExternalGS(name)
     local unit = (name == UnitName("player")) and "player" or name
     if GearScore_GetScore then 
@@ -91,7 +90,6 @@ function SLFM:UpdateMessage()
     for spec, target in pairs(db.specs) do
         if target > 0 then
             neededSpecific[spec] = target
-            -- V12 FIX: Odstránime " (OS nieco)" pre presný match základnej roly
             local cleanSpec = spec:match("^(.-) %(") or spec
             local parentRole = SpecToRole[cleanSpec]
             
@@ -128,14 +126,12 @@ function SLFM:UpdateMessage()
     if neededGeneric.mDPS > 0 then needs = needs .. neededGeneric.mDPS .. "x mDPS, " end
     if neededGeneric.rDPS > 0 then needs = needs .. neededGeneric.rDPS .. "x rDPS, " end
     
-    for spec, t in pairs(neededSpecific) do
-        needs = needs .. t .. "x " .. spec .. ", "
-    end
+    for spec, t in pairs(neededSpecific) do needs = needs .. t .. "x " .. spec .. ", " end
     
     if db.minGS > 0 then msg = msg .. " - Req: " .. db.minGS .. "+ GS" end
     if db.reqAchiev then msg = msg .. " & Achiev" end
     
-    SLFM.CurrentMsg = msg .. " - Need: " .. (needs ~= "" and needs:gsub(", $", "") or "PUMPERS") .. " - w me spec/gs!"
+    SLFM.CurrentMsg = msg .. " - Need: " .. (needs ~= "" and needs:gsub(", $", "") or "PUMPERS") .. " - w me spec/gs/achi!"
     if SausageLFM_Main and SausageLFM_Main.preview then SausageLFM_Main.preview:SetText(SLFM.CurrentMsg) end
 end
 
@@ -173,13 +169,10 @@ SLFM:SetScript("OnUpdate", function(self, elapsed)
     if SLFM.lastInspect > 2 and #SLFM.InspectQueue > 0 and not SLFM.CurrentInspectUnit then
         local unit = table.remove(SLFM.InspectQueue, 1)
         if UnitExists(unit) and CanInspect(unit) then 
-            SLFM.CurrentInspectUnit = unit
-            NotifyInspect(unit) 
+            SLFM.CurrentInspectUnit = unit; NotifyInspect(unit) 
         end
         SLFM.lastInspect = 0
-    elseif SLFM.lastInspect > 5 then
-        SLFM.CurrentInspectUnit = nil
-    end
+    elseif SLFM.lastInspect > 5 then SLFM.CurrentInspectUnit = nil end
 end)
 
 SLFM:RegisterEvent("ADDON_LOADED")
@@ -234,11 +227,7 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
                 SLFM.RaidData[name] = SLFM.RaidData[name] or {}
                 local s1 = GetSpecName(SLFM.CurrentInspectUnit, 1)
                 local s2 = GetSpecName(SLFM.CurrentInspectUnit, 2)
-                if s2 ~= "Unknown" and s2 ~= s1 then
-                    SLFM.RaidData[name].talents = s1 .. "/" .. s2
-                else
-                    SLFM.RaidData[name].talents = s1
-                end
+                if s2 ~= "Unknown" and s2 ~= s1 then SLFM.RaidData[name].talents = s1 .. "/" .. s2 else SLFM.RaidData[name].talents = s1 end
             end
         end
         SLFM.CurrentInspectUnit = nil
@@ -248,47 +237,60 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         local msg, sender = ...
         local lmsg = msg:lower()
         
-        local gsMatch = lmsg:match("(%d[%.%,]?%d?)k") or lmsg:match("(%d%d%d%d)")
+        -- V13: ROZŠÍRENÝ GS SCANNER (Zachytí 3.6gs, 5.8 gs, 6k, 6000)
+        local gsMatch = lmsg:match("(%d[%.%,]%d?)%s*k") or lmsg:match("(%d[%.%,]%d?)%s*gs") or lmsg:match("(%d%d%d%d)")
         local gs = 0
         if gsMatch then 
             gs = tonumber((gsMatch:gsub(",", ".")))
             if gs and gs < 100 then gs = gs * 1000 end
         end
 
+        -- ROLE SCANNER
         local detectedRole = "Uncategorized"
-        local detectedSpecStr = ""
-        
         if lmsg:find("tank") or lmsg:find("prot") or lmsg:find("blood") or lmsg:find("bear") then detectedRole = "Tank" end
         if lmsg:find("heal") or lmsg:find("resto") or lmsg:find("holy") or lmsg:find("disc") or lmsg:find("tree") then detectedRole = "Heal" end
         if lmsg:find("mdps") or lmsg:find("melee") or lmsg:find("ret") or lmsg:find("feral") or lmsg:find("rogue") or lmsg:find("enh") or lmsg:find("warr") or lmsg:find("dk") then detectedRole = "mDPS" end
         if lmsg:find("rdps") or lmsg:find("ranged") or lmsg:find("shadow") or lmsg:find("boom") or lmsg:find("mage") or lmsg:find("lock") or lmsg:find("hunt") or lmsg:find("ele") then detectedRole = "rDPS" end
         
+        -- V13: DUAL-SPEC AI SCANNER
         local specKeywords = {"prot", "ret", "holy", "resto", "feral", "boom", "shadow", "disc", "blood", "frost", "unholy", "ele", "enh", "tree", "bear"}
+        local foundSpecs = {}
         for _, s in ipairs(specKeywords) do
-            if lmsg:find(s) then detectedSpecStr = s; break end
+            local pos = lmsg:find(s)
+            if pos then table.insert(foundSpecs, {name=s, pos=pos}) end
+        end
+        table.sort(foundSpecs, function(a,b) return a.pos < b.pos end)
+
+        local detectedSpecStr = ""
+        local detectedOSStr = ""
+        
+        if #foundSpecs > 0 then detectedSpecStr = foundSpecs[1].name end
+        local osPos = lmsg:find("os") or lmsg:find("offspec") or lmsg:find("dual")
+        if osPos then
+            for i=2, #foundSpecs do
+                if foundSpecs[i].pos > osPos then detectedOSStr = foundSpecs[i].name; break end
+            end
         end
 
-        -- V12 Requirement Scanners
         local noAchiev = false
         if SausageLFM_DB.reqAchiev and not lmsg:find("achievement:") then noAchiev = true end
         local isPvP = false
-        if lmsg:find("pvp") or lmsg:find("resil") then isPvP = true end -- Basic PvP marker for now
+        if lmsg:find("pvp") or lmsg:find("resil") then isPvP = true end
 
         local isNew = true
         for _, q in ipairs(SLFM.Queue) do
             if q.name == sender then 
-                isNew = false
-                q.gs = gs > 0 and gs or q.gs
+                isNew = false; q.gs = gs > 0 and gs or q.gs; q.msg = msg -- Update histórue chatu
                 if detectedRole ~= "Uncategorized" then q.role = detectedRole end
                 if detectedSpecStr ~= "" then q.spec = detectedSpecStr end
-                q.noAchiev = noAchiev
-                q.isPvP = isPvP
+                if detectedOSStr ~= "" then q.os = detectedOSStr end
+                q.noAchiev = noAchiev; q.isPvP = isPvP
                 break 
             end
         end
         
         if isNew then
-            table.insert(SLFM.Queue, 1, { name = sender, gs = gs, role = detectedRole, spec = detectedSpecStr, noAchiev = noAchiev, isPvP = isPvP, unread = true })
+            table.insert(SLFM.Queue, 1, { name = sender, gs = gs, role = detectedRole, spec = detectedSpecStr, os = detectedOSStr, noAchiev = noAchiev, isPvP = isPvP, msg = msg, unread = true })
             if #SLFM.Queue > 15 then table.remove(SLFM.Queue) end
         end
         if self.RefreshQueueTable then self:RefreshQueueTable() end
