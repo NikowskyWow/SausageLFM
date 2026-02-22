@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "1.14.2"
+SLFM.Version = "1.15.0"
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -59,18 +59,18 @@ local ClassTalents = {
     ["ROGUE"] = { [1]="Assa", [2]="Combat", [3]="Sub" }
 }
 
--- V14.2 FIX: Bezpečný preklad argumentov pre 'tonumber'
+-- V15 PERFECT GEARSCORE HOOKER
 function SLFM:GetExternalGS(name)
-    local unit = (name == UnitName("player")) and "player" or name
-    local gs = 0
-    if GearScore_GetScore then 
-        local rawGS = GearScore_GetScore(unit) -- Záchyt hodnoty pred tonumber
-        gs = tonumber(rawGS) or 0
-        if gs > 0 then return gs end
-    end
     local realm = GetRealmName()
+    
+    -- Ak žiadame vlastné GS a GearScore je nainštalovaný, donútime ho prepočítať nás
+    if name == UnitName("player") and type(GearScore_GetScore) == "function" then
+        GearScore_GetScore(name, "player")
+    end
+
+    -- Následne vytiahneme hodnotu z jeho databázy
     if GS_Data and GS_Data[realm] and GS_Data[realm].Players and GS_Data[realm].Players[name] then
-        gs = tonumber(GS_Data[realm].Players[name].GearScore) or 0
+        local gs = tonumber(GS_Data[realm].Players[name].GearScore) or 0
         if gs > 0 then return gs end
     end
     return 0
