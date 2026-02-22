@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "1.16.2"
+SLFM.Version = "1.16.4"
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -19,7 +19,9 @@ local defaults = {
     roles = { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 },
     specs = {},
     channels = { World = false, Global = false, LFG = false, Party = true },
-    whitelist = {}
+    whitelist = {},
+    Queue = {},
+    RaidData = {}
 }
 
 local SpecToRole = {
@@ -123,31 +125,37 @@ function SLFM:UpdateMessage()
         if data.role and current[data.role] then current[data.role] = current[data.role] + 1 end
     end
 
-    local neededGeneric = { Tank = db.roles.Tank or 0, Heal = db.roles.Heal or 0, mDPS = db.roles.mDPS or 0, rDPS = db.roles.rDPS or 0 }
-    local neededSpecific = {}
+    local missingGeneric = {
+        Tank = math.max(0, (db.roles.Tank or 0) - current.Tank),
+        Heal = math.max(0, (db.roles.Heal or 0) - current.Heal),
+        mDPS = math.max(0, (db.roles.mDPS or 0) - current.mDPS),
+        rDPS = math.max(0, (db.roles.rDPS or 0) - current.rDPS)
+    }
+
+    local finalSpecific = {}
     for spec, target in pairs(db.specs) do
         if target > 0 then
-            neededSpecific[spec] = target
+            finalSpecific[spec] = target
             local cleanSpec = spec:match("^(.-) %(") or spec
             local parentRole = SpecToRole[cleanSpec]
             if not parentRole then
                 if cleanSpec == "Tank" then parentRole = "Tank" elseif cleanSpec == "Healer" then parentRole = "Heal" elseif cleanSpec == "Melee DPS" then parentRole = "mDPS" elseif cleanSpec == "Ranged DPS" then parentRole = "rDPS" end
             end
-            if parentRole and neededGeneric[parentRole] then neededGeneric[parentRole] = math.max(0, neededGeneric[parentRole] - target) end
+            if parentRole and missingGeneric[parentRole] then 
+                missingGeneric[parentRole] = math.max(0, missingGeneric[parentRole] - target) 
+            end
         end
     end
-
-    for role, target in pairs(neededGeneric) do neededGeneric[role] = math.max(0, target - current[role]) end
 
     local modeName = (db.instance == "Dungeon") and db.mode or (db.instance .. " " .. db.mode)
     local msg = "LFM " .. modeName .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. ((db.instance == "Dungeon") and 5 or ((db.mode == "10") and 10 or 25)) .. ")"
     
     local needs = ""
-    if neededGeneric.Tank > 0 then needs = needs .. neededGeneric.Tank .. "x Tank, " end
-    if neededGeneric.Heal > 0 then needs = needs .. neededGeneric.Heal .. "x Heal, " end
-    if neededGeneric.mDPS > 0 then needs = needs .. neededGeneric.mDPS .. "x mDPS, " end
-    if neededGeneric.rDPS > 0 then needs = needs .. neededGeneric.rDPS .. "x rDPS, " end
-    for spec, t in pairs(neededSpecific) do needs = needs .. t .. "x " .. spec .. ", " end
+    if missingGeneric.Tank > 0 then needs = needs .. missingGeneric.Tank .. "x Tank, " end
+    if missingGeneric.Heal > 0 then needs = needs .. missingGeneric.Heal .. "x Heal, " end
+    if missingGeneric.mDPS > 0 then needs = needs .. missingGeneric.mDPS .. "x mDPS, " end
+    if missingGeneric.rDPS > 0 then needs = needs .. missingGeneric.rDPS .. "x rDPS, " end
+    for spec, t in pairs(finalSpecific) do needs = needs .. t .. "x " .. spec .. ", " end
     
     if db.minGS > 0 then msg = msg .. " - Req: " .. db.minGS .. "+ GS" end
     if db.reqAchiev then msg = msg .. " & Achiev" end
@@ -206,6 +214,12 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         SausageLFM_DB.channels = SausageLFM_DB.channels or { World = false, Global = false, LFG = false, Party = true }
         SausageLFM_DB.interval = SausageLFM_DB.interval or 45
         SausageLFM_DB.whitelist = SausageLFM_DB.whitelist or {}
+        SausageLFM_DB.Queue = SausageLFM_DB.Queue or {}
+        SausageLFM_DB.RaidData = SausageLFM_DB.RaidData or {}
+        
+        -- Napojenie globálnych premenných na SavedVariables pre perzistenciu
+        SLFM.Queue = SausageLFM_DB.Queue
+        SLFM.RaidData = SausageLFM_DB.RaidData
 
     elseif event == "RAID_ROSTER_UPDATE" or event == "PARTY_MEMBERS_CHANGED" then
         local inGroup = {}
@@ -227,7 +241,6 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
                     SLFM.RaidData[qName].role = SLFM.Queue[i].role or "Uncategorized" 
                 end
                 
-                -- FIX: Bezpečný prenos špecializácií z Whispu do Raidu, ak hráč nebol zoskenovaný
                 if not SLFM.RaidData[qName].talents and SLFM.Queue[i].spec and SLFM.Queue[i].spec ~= "" then
                     SLFM.RaidData[qName].talents = SLFM.Queue[i].spec
                 end

@@ -6,6 +6,26 @@ StaticPopupDialogs["SLFM_KICK_CONFIRM"] = {
     OnAccept = function(self, name) UninviteUnit(name) end, timeout = 0, whileDead = true, hideOnEscape = true,
 }
 
+StaticPopupDialogs["SLFM_CLEAR_RAID"] = {
+    text = "Are you sure you want to clear the Raid Overview data?",
+    button1 = "Yes", button2 = "No",
+    OnAccept = function() 
+        SLFM.RaidData = {}; SausageLFM_DB.RaidData = {}
+        SLFM:RefreshRaidTable(); SLFM:UpdateMessage() 
+    end,
+    timeout = 0, whileDead = true, hideOnEscape = true,
+}
+
+StaticPopupDialogs["SLFM_CLEAR_QUEUE"] = {
+    text = "Are you sure you want to clear the Candidate Queue?",
+    button1 = "Yes", button2 = "No",
+    OnAccept = function() 
+        SLFM.Queue = {}; SausageLFM_DB.Queue = {}
+        SLFM:RefreshQueueTable() 
+    end,
+    timeout = 0, whileDead = true, hideOnEscape = true,
+}
+
 local ClassData = {
     ["Generic Role"] = {"Tank", "Healer", "Melee DPS", "Ranged DPS"},
     ["Paladin"] = {"Holy", "Prot", "Ret"}, ["Warrior"] = {"Arms", "Fury", "Prot"},
@@ -56,11 +76,35 @@ function SLFM:InitializeUI()
     
     local updateBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     updateBtn:SetSize(110, 22); updateBtn:SetPoint("RIGHT", closeBtn, "LEFT", -10, 0); updateBtn:SetText("Check Updates")
-    updateBtn:SetScript("OnClick", function() print("|cff00ccff[SausageLFM]|r You are running the latest V16.2 (The Raid Master)!") end)
+    updateBtn:SetScript("OnClick", function() print("|cff00ccff[SausageLFM]|r You are running the latest V1.16.4!") end)
 
     local left = CreateFrame("Frame", "SausageLFM_Raid", f); left:SetSize(280, 570); left:SetPoint("TOPLEFT", 20, -60); CreateBackdrop(left, "blue")
+    
+    local scanBtn = CreateFrame("Button", nil, left, "UIPanelButtonTemplate")
+    scanBtn:SetSize(80, 20); scanBtn:SetPoint("TOPRIGHT", -5, -5); scanBtn:SetText("Force Scan")
+    scanBtn:SetScript("OnClick", function()
+        SLFM.InspectQueue = {}
+        if GetNumRaidMembers() > 0 then
+            for i=1, GetNumRaidMembers() do local n = GetRaidRosterInfo(i); if n then table.insert(SLFM.InspectQueue, "raid"..i) end end
+        else
+            for i=1, GetNumPartyMembers() do local n = UnitName("party"..i); if n then table.insert(SLFM.InspectQueue, "party"..i) end end
+            table.insert(SLFM.InspectQueue, "player")
+        end
+        SLFM.lastInspect = 2
+        SLFM:RefreshRaidTable()
+        print("|cff00ccff[SausageLFM]|r Manual scan triggered.")
+    end)
+
+    local clearRaidBtn = CreateFrame("Button", nil, left, "UIPanelButtonTemplate")
+    clearRaidBtn:SetSize(60, 20); clearRaidBtn:SetPoint("RIGHT", scanBtn, "LEFT", -5, 0); clearRaidBtn:SetText("Clear")
+    clearRaidBtn:SetScript("OnClick", function() StaticPopup_Show("SLFM_CLEAR_RAID") end)
+
     local mid = CreateFrame("Frame", nil, f); mid:SetSize(410, 570); mid:SetPoint("TOPLEFT", left, "TOPRIGHT", 15, 0)
     local right = CreateFrame("Frame", "SausageLFM_Queue", f); right:SetSize(280, 570); right:SetPoint("TOPLEFT", mid, "TOPRIGHT", 15, 0); CreateBackdrop(right, "gold")
+
+    local clearQueueBtn = CreateFrame("Button", nil, right, "UIPanelButtonTemplate")
+    clearQueueBtn:SetSize(60, 20); clearQueueBtn:SetPoint("TOPRIGHT", -5, -5); clearQueueBtn:SetText("Clear")
+    clearQueueBtn:SetScript("OnClick", function() StaticPopup_Show("SLFM_CLEAR_QUEUE") end)
 
     local qTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     qTitle:SetPoint("BOTTOM", right, "TOP", 0, 5)
@@ -101,7 +145,6 @@ function SLFM:InitializeUI()
                     UIDropDownMenu_AddButton(info, level)
                 end
             elseif menuList == "OFFSPECS" then
-                -- FIX: Zjednotenie API výstupu Classy s našou tabuľkou ClassData
                 local _, englishClass = UnitClass(name)
                 local classMapping = {
                     ["PALADIN"] = "Paladin", ["WARRIOR"] = "Warrior", ["DEATHKNIGHT"] = "Death Knight",
@@ -283,7 +326,7 @@ function SLFM:InitializeUI()
     f.preview = previewBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.preview:SetPoint("CENTER", 0, 0); f.preview:SetSize(990, 40); f.preview:SetWordWrap(true); f.preview:SetJustifyH("CENTER"); f.preview:SetJustifyV("MIDDLE"); f.preview:SetTextColor(1, 0.82, 0)
     
-    local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); verText:SetPoint("BOTTOMRIGHT", -20, 10); verText:SetText("v" .. (SLFM.Version or "1.16.2") .. " by Sausage Party")
+    local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); verText:SetPoint("BOTTOMRIGHT", -20, 10); verText:SetText("v" .. (SLFM.Version or "1.16.4") .. " by Sausage Party")
 
     self:RefreshRaidTable()
     self:RefreshQueueTable()
@@ -426,7 +469,6 @@ function SLFM:RefreshRaidTable()
                 if not self.rRows[rowIndex] then self.rRows[rowIndex] = CreateFrame("Button", nil, SausageLFM_Raid) end
                 local r = self.rRows[rowIndex]; r:SetSize(260, 16); r:SetPoint("TOPLEFT", 10, yOffset)
                 
-                -- FIX: Jemné grafické vyznačenie Whitelistu
                 if not r.wlBg then
                     r.wlBg = r:CreateTexture(nil, "BACKGROUND")
                     r.wlBg:SetAllPoints(r)
