@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "1.14.0"
+SLFM.Version = "1.14.2"
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -59,12 +59,13 @@ local ClassTalents = {
     ["ROGUE"] = { [1]="Assa", [2]="Combat", [3]="Sub" }
 }
 
--- V14 BRUTE-FORCE GS SCANNER
+-- V14.2 FIX: Bezpečný preklad argumentov pre 'tonumber'
 function SLFM:GetExternalGS(name)
     local unit = (name == UnitName("player")) and "player" or name
     local gs = 0
     if GearScore_GetScore then 
-        gs = tonumber(GearScore_GetScore(unit)) or 0
+        local rawGS = GearScore_GetScore(unit) -- Záchyt hodnoty pred tonumber
+        gs = tonumber(rawGS) or 0
         if gs > 0 then return gs end
     end
     local realm = GetRealmName()
@@ -276,13 +277,12 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
             end
         end
 
-        -- V14 ANTI-FAKE ACHIEV SHIELD LOGIC
         local hasAchi = false
         if msg:upper():find("|HACHIEVEMENT:") then
             local hexGuid = (guid and type(guid) == "string") and string.sub(guid, 3) or ""
             hexGuid = string.upper(hexGuid)
             if hexGuid ~= "" and msg:upper():find(hexGuid) then
-                hasAchi = true -- Valid, non-faked achievement
+                hasAchi = true
             end
         end
 
