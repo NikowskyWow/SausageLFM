@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "1.11.0"
+SLFM.Version = "1.12.0"
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -33,7 +33,6 @@ local abbr = {
     ["Utgarde Pinnacle"] = "UP", ["The Oculus"] = "Oculus", ["The Culling of Stratholme"] = "CoS"
 }
 
--- Slovník pre Smart Math (aby addon vedel, že Warlock je rDPS a odpočítal ho)
 local SpecToRole = {
     ["Holy Paladin"] = "Heal", ["Prot Paladin"] = "Tank", ["Ret Paladin"] = "mDPS",
     ["Resto Shaman"] = "Heal", ["Ele Shaman"] = "rDPS", ["Enhance Shaman"] = "mDPS",
@@ -60,9 +59,11 @@ local ClassTalents = {
     ["ROGUE"] = { [1]="Assa", [2]="Combat", [3]="Sub" }
 }
 
+-- V12 GS Hooker (Podpora pre UnitName aj "player")
 function SLFM:GetExternalGS(name)
+    local unit = (name == UnitName("player")) and "player" or name
     if GearScore_GetScore then 
-        local gs = GearScore_GetScore(name)
+        local gs = GearScore_GetScore(unit)
         if gs and gs > 0 then return gs end
     end
     local realm = GetRealmName()
@@ -75,10 +76,8 @@ end
 function SLFM:UpdateMessage()
     local db = SausageLFM_DB
     local count = GetNumRaidMembers() > 0 and GetNumRaidMembers() or (GetNumPartyMembers() > 0 and GetNumPartyMembers() + 1 or 1)
-    
     if db.instance ~= "Dungeon" and db.mode ~= "10" and db.mode ~= "25" then db.mode = "25" end
 
-    -- 1. Zrátame ľudí v raide podľa rolí
     local current = { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 }
     for name, data in pairs(SLFM.RaidData) do
         if data.role and current[data.role] then
@@ -86,21 +85,21 @@ function SLFM:UpdateMessage()
         end
     end
 
-    -- 2. Smart Math: Odpočítame špecifické specy od základného targetu
     local neededGeneric = { Tank = db.roles.Tank or 0, Heal = db.roles.Heal or 0, mDPS = db.roles.mDPS or 0, rDPS = db.roles.rDPS or 0 }
     local neededSpecific = {}
     
     for spec, target in pairs(db.specs) do
         if target > 0 then
             neededSpecific[spec] = target
-            local parentRole = SpecToRole[spec]
+            -- V12 FIX: Odstránime " (OS nieco)" pre presný match základnej roly
+            local cleanSpec = spec:match("^(.-) %(") or spec
+            local parentRole = SpecToRole[cleanSpec]
             
-            -- Fallback pre Generic Roles (napr. "Melee DPS (OS Tank)")
             if not parentRole then
-                if spec:find("Tank") then parentRole = "Tank"
-                elseif spec:find("Healer") then parentRole = "Heal"
-                elseif spec:find("Melee") then parentRole = "mDPS"
-                elseif spec:find("Ranged") then parentRole = "rDPS" end
+                if cleanSpec == "Tank" then parentRole = "Tank"
+                elseif cleanSpec == "Healer" then parentRole = "Heal"
+                elseif cleanSpec == "Melee DPS" then parentRole = "mDPS"
+                elseif cleanSpec == "Ranged DPS" then parentRole = "rDPS" end
             end
 
             if parentRole and neededGeneric[parentRole] then
@@ -109,7 +108,6 @@ function SLFM:UpdateMessage()
         end
     end
 
-    -- 3. Odpočítame ľudí, ktorí už v raide sú
     for role, target in pairs(neededGeneric) do
         neededGeneric[role] = math.max(0, target - current[role])
     end
@@ -147,7 +145,7 @@ local function GetSpecName(unit, group)
     local maxPts, specIdx = 0, 0
     for i=1, 3 do
         local _, _, pts = GetTalentTabInfo(i, true, false, group)
-        if pts > maxPts then maxPts = pts; specIdx = i end
+        if pts and pts > maxPts then maxPts = pts; specIdx = i end
     end
     return ClassTalents[class][specIdx] or "Unknown"
 end
@@ -180,7 +178,7 @@ SLFM:SetScript("OnUpdate", function(self, elapsed)
         end
         SLFM.lastInspect = 0
     elseif SLFM.lastInspect > 5 then
-        SLFM.CurrentInspectUnit = nil -- Timeout poistka
+        SLFM.CurrentInspectUnit = nil
     end
 end)
 
@@ -200,23 +198,15 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
 
     elseif event == "RAID_ROSTER_UPDATE" or event == "PARTY_MEMBERS_CHANGED" then
         local inGroup = {}
-        local isRaid = GetNumRaidMembers() > 0
-        
-        if isRaid then
+        if GetNumRaidMembers() > 0 then
             for i=1, GetNumRaidMembers() do
                 local n = GetRaidRosterInfo(i)
-                if n then 
-                    inGroup[n] = true 
-                    if not SLFM.RaidData[n] then table.insert(SLFM.InspectQueue, "raid"..i) end
-                end
+                if n then inGroup[n] = true; if not SLFM.RaidData[n] then table.insert(SLFM.InspectQueue, "raid"..i) end end
             end
         else
             for i=1, GetNumPartyMembers() do
                 local n = UnitName("party"..i)
-                if n then 
-                    inGroup[n] = true
-                    if not SLFM.RaidData[n] then table.insert(SLFM.InspectQueue, "party"..i) end
-                end
+                if n then inGroup[n] = true; if not SLFM.RaidData[n] then table.insert(SLFM.InspectQueue, "party"..i) end end
             end
             local pName = (UnitName("player"))
             inGroup[pName] = true
@@ -269,13 +259,20 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         local detectedSpecStr = ""
         
         if lmsg:find("tank") or lmsg:find("prot") or lmsg:find("blood") or lmsg:find("bear") then detectedRole = "Tank" end
-        if lmsg:find("heal") or lmsg:find("resto") or lmsg:find("holy") or lmsg:find("disc") or lmsg:find("tree") then detectedRole = "Healer" end
-        if lmsg:find("dps") or lmsg:find("ret") or lmsg:find("shadow") or lmsg:find("boom") or lmsg:find("feral") or lmsg:find("rogue") or lmsg:find("mage") or lmsg:find("lock") or lmsg:find("hunt") or lmsg:find("ele") or lmsg:find("enh") or lmsg:find("warr") or lmsg:find("dk") then detectedRole = "DPS" end
+        if lmsg:find("heal") or lmsg:find("resto") or lmsg:find("holy") or lmsg:find("disc") or lmsg:find("tree") then detectedRole = "Heal" end
+        if lmsg:find("mdps") or lmsg:find("melee") or lmsg:find("ret") or lmsg:find("feral") or lmsg:find("rogue") or lmsg:find("enh") or lmsg:find("warr") or lmsg:find("dk") then detectedRole = "mDPS" end
+        if lmsg:find("rdps") or lmsg:find("ranged") or lmsg:find("shadow") or lmsg:find("boom") or lmsg:find("mage") or lmsg:find("lock") or lmsg:find("hunt") or lmsg:find("ele") then detectedRole = "rDPS" end
         
         local specKeywords = {"prot", "ret", "holy", "resto", "feral", "boom", "shadow", "disc", "blood", "frost", "unholy", "ele", "enh", "tree", "bear"}
         for _, s in ipairs(specKeywords) do
             if lmsg:find(s) then detectedSpecStr = s; break end
         end
+
+        -- V12 Requirement Scanners
+        local noAchiev = false
+        if SausageLFM_DB.reqAchiev and not lmsg:find("achievement:") then noAchiev = true end
+        local isPvP = false
+        if lmsg:find("pvp") or lmsg:find("resil") then isPvP = true end -- Basic PvP marker for now
 
         local isNew = true
         for _, q in ipairs(SLFM.Queue) do
@@ -284,12 +281,14 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
                 q.gs = gs > 0 and gs or q.gs
                 if detectedRole ~= "Uncategorized" then q.role = detectedRole end
                 if detectedSpecStr ~= "" then q.spec = detectedSpecStr end
+                q.noAchiev = noAchiev
+                q.isPvP = isPvP
                 break 
             end
         end
         
         if isNew then
-            table.insert(SLFM.Queue, 1, { name = sender, gs = gs, role = detectedRole, spec = detectedSpecStr, unread = true })
+            table.insert(SLFM.Queue, 1, { name = sender, gs = gs, role = detectedRole, spec = detectedSpecStr, noAchiev = noAchiev, isPvP = isPvP, unread = true })
             if #SLFM.Queue > 15 then table.remove(SLFM.Queue) end
         end
         if self.RefreshQueueTable then self:RefreshQueueTable() end
