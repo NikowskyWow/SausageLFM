@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "1.16.1"
+SLFM.Version = "1.16.2"
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -19,7 +19,7 @@ local defaults = {
     roles = { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 },
     specs = {},
     channels = { World = false, Global = false, LFG = false, Party = true },
-    whitelist = {} -- V16 Whitelist
+    whitelist = {}
 }
 
 local SpecToRole = {
@@ -48,11 +48,9 @@ local ClassTalents = {
     ["ROGUE"] = { [1]="Assa", [2]="Combat", [3]="Sub" }
 }
 
--- Neviditeľný Tooltip pre skenovanie PvP itemov bez enchantov
 local ScanTT = CreateFrame("GameTooltip", "SLFM_ScanTT", nil, "GameTooltipTemplate")
 ScanTT:SetOwner(WorldFrame, "ANCHOR_NONE")
 
--- V16 PvP Base Item Scanner (Ignoruje enchanty a gemy)
 local function HasBaseResilience(itemLink)
     if not itemLink then return false end
     local itemID = itemLink:match("item:(%d+)")
@@ -71,7 +69,6 @@ local function HasBaseResilience(itemLink)
     return false
 end
 
--- V16 GEARSCORELITE HOOKER
 function SLFM:GetExternalGS(name)
     local gs = 0
     if type(GearScore_GetScore) == "function" then
@@ -87,31 +84,26 @@ function SLFM:GetExternalGS(name)
     return 0
 end
 
--- V16 WARNING MATRIX
 function SLFM:GetWarnings(name, gs, role, msgIsPvP)
     local warnings = {}
-    if SausageLFM_DB.whitelist and SausageLFM_DB.whitelist[name] then return warnings end -- Whitelist Ignorácia
+    if SausageLFM_DB.whitelist and SausageLFM_DB.whitelist[name] then return warnings end
 
-    -- 1. Low GS
     if gs and gs > 0 and SausageLFM_DB.minGS > 0 and gs < SausageLFM_DB.minGS then
         table.insert(warnings, "Low GearScore: " .. gs .. " (Req: " .. SausageLFM_DB.minGS .. ")")
     end
 
     local pData = SLFM.RaidData[name] or {}
 
-    -- 2. PvP Gear Detekcia
     if pData.pvpItems and pData.pvpItems > 1 then
         table.insert(warnings, "PvP Gear detected! (" .. pData.pvpItems .. " pure PvP items equipped)")
     elseif msgIsPvP then
         table.insert(warnings, "Player mentioned PvP in whisper")
     end
 
-    -- 3. Role Mismatch
     if role and role ~= "Uncategorized" and pData.activeSpec then
         local expectedRole = SpecToRole[pData.activeSpec]
         if expectedRole and expectedRole ~= role then
             if expectedRole == "mDPS" and role == "Tank" then
-                -- Ignorujeme
             else
                 table.insert(warnings, "Wrong Gear/Spec! Assigned: " .. role .. ", Active Spec: " .. pData.activeSpec)
             end
@@ -231,7 +223,18 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
             local qName = SLFM.Queue[i].name
             if inGroup[qName] then
                 SLFM.RaidData[qName] = SLFM.RaidData[qName] or {}
-                if not SLFM.RaidData[qName].role or SLFM.RaidData[qName].role == "Uncategorized" then SLFM.RaidData[qName].role = SLFM.Queue[i].role or "Uncategorized" end
+                if not SLFM.RaidData[qName].role or SLFM.RaidData[qName].role == "Uncategorized" then 
+                    SLFM.RaidData[qName].role = SLFM.Queue[i].role or "Uncategorized" 
+                end
+                
+                -- FIX: Bezpečný prenos špecializácií z Whispu do Raidu, ak hráč nebol zoskenovaný
+                if not SLFM.RaidData[qName].talents and SLFM.Queue[i].spec and SLFM.Queue[i].spec ~= "" then
+                    SLFM.RaidData[qName].talents = SLFM.Queue[i].spec
+                end
+                if not SLFM.RaidData[qName].manualOS and SLFM.Queue[i].os and SLFM.Queue[i].os ~= "" then
+                    SLFM.RaidData[qName].manualOS = SLFM.Queue[i].os
+                end
+
                 table.remove(SLFM.Queue, i)
             end
         end
@@ -336,9 +339,6 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
--- ==========================================
--- 🛡️ MINIMAP ICON
--- ==========================================
 local btn = CreateFrame("Button", "SausageLFM_Minimap", Minimap)
 btn:SetSize(32, 32)
 btn:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 0, -50)

@@ -56,7 +56,7 @@ function SLFM:InitializeUI()
     
     local updateBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     updateBtn:SetSize(110, 22); updateBtn:SetPoint("RIGHT", closeBtn, "LEFT", -10, 0); updateBtn:SetText("Check Updates")
-    updateBtn:SetScript("OnClick", function() print("|cff00ccff[SausageLFM]|r You are running the latest V16 (The Raid Master)!") end)
+    updateBtn:SetScript("OnClick", function() print("|cff00ccff[SausageLFM]|r You are running the latest V16.2 (The Raid Master)!") end)
 
     local left = CreateFrame("Frame", "SausageLFM_Raid", f); left:SetSize(280, 570); left:SetPoint("TOPLEFT", 20, -60); CreateBackdrop(left, "blue")
     local mid = CreateFrame("Frame", nil, f); mid:SetSize(410, 570); mid:SetPoint("TOPLEFT", left, "TOPRIGHT", 15, 0)
@@ -70,7 +70,6 @@ function SLFM:InitializeUI()
     lTitle:SetPoint("BOTTOM", left, "TOP", 0, 5)
     lTitle:SetText("Raid Overview")
 
-    -- V16: MULTI-LEVEL DROPDOWN (Role, Set OS, Whitelist)
     local roleDrop = CreateFrame("Frame", "SLFM_RoleDrop", UIParent, "UIDropDownMenuTemplate")
     UIDropDownMenu_Initialize(roleDrop, function(self, level, menuList)
         local info = UIDropDownMenu_CreateInfo()
@@ -102,9 +101,17 @@ function SLFM:InitializeUI()
                     UIDropDownMenu_AddButton(info, level)
                 end
             elseif menuList == "OFFSPECS" then
-                local _, class = UnitClass(name)
-                if class and ClassData[class] then
-                    for _, spec in ipairs(ClassData[class]) do
+                -- FIX: Zjednotenie API výstupu Classy s našou tabuľkou ClassData
+                local _, englishClass = UnitClass(name)
+                local classMapping = {
+                    ["PALADIN"] = "Paladin", ["WARRIOR"] = "Warrior", ["DEATHKNIGHT"] = "Death Knight",
+                    ["HUNTER"] = "Hunter", ["SHAMAN"] = "Shaman", ["ROGUE"] = "Rogue",
+                    ["DRUID"] = "Druid", ["MAGE"] = "Mage", ["PRIEST"] = "Priest", ["WARLOCK"] = "Warlock"
+                }
+                
+                local mappedClass = classMapping[englishClass]
+                if mappedClass and ClassData[mappedClass] then
+                    for _, spec in ipairs(ClassData[mappedClass]) do
                         info.text = spec; info.notCheckable = true
                         info.func = function()
                             SLFM.RaidData[name] = SLFM.RaidData[name] or {}
@@ -127,7 +134,6 @@ function SLFM:InitializeUI()
     end, "MENU")
     f.roleDrop = roleDrop
 
-    -- Middle Panel Settings
     local ach = CreateFrame("CheckButton", nil, mid, "UICheckButtonTemplate"); ach:SetPoint("TOPLEFT", 10, -45); ach:SetChecked(SausageLFM_DB.reqAchiev)
     ach:SetScript("OnClick", function(self) SausageLFM_DB.reqAchiev = self:GetChecked(); SLFM:UpdateMessage(); SLFM:RefreshQueueTable() end)
     local achTxt = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); achTxt:SetPoint("LEFT", ach, "RIGHT", 2, 0); achTxt:SetText("Achiev")
@@ -277,15 +283,12 @@ function SLFM:InitializeUI()
     f.preview = previewBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.preview:SetPoint("CENTER", 0, 0); f.preview:SetSize(990, 40); f.preview:SetWordWrap(true); f.preview:SetJustifyH("CENTER"); f.preview:SetJustifyV("MIDDLE"); f.preview:SetTextColor(1, 0.82, 0)
     
-    local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); verText:SetPoint("BOTTOMRIGHT", -20, 10); verText:SetText("v" .. (SLFM.Version or "1.16.0") .. " by Sausage Party")
+    local verText = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); verText:SetPoint("BOTTOMRIGHT", -20, 10); verText:SetText("v" .. (SLFM.Version or "1.16.2") .. " by Sausage Party")
 
     self:RefreshRaidTable()
     self:RefreshQueueTable()
 end
 
--- =====================================
--- 🛡️ V16 CANDIDATE QUEUE (S Inteligentnou Lebkou)
--- =====================================
 function SLFM:RefreshQueueTable()
     if not SausageLFM_Queue or not SausageLFM_Queue:IsShown() then return end
     if not self.qRows then self.qRows = {} end
@@ -295,14 +298,11 @@ function SLFM:RefreshQueueTable()
             local r = CreateFrame("Frame", nil, SausageLFM_Queue)
             r:SetSize(265, 25); r:SetPoint("TOPLEFT", 5, -15-(i*28)); r:EnableMouse(true)
             
-            -- V16: Zväčšená Obálka
             r.env = CreateFrame("Button", nil, r); r.env:SetSize(16, 16); r.env:SetPoint("LEFT", 5, 0); r.env:SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox")
             
-            -- V16: Zväčšený Achiev Shield
             r.achi = CreateFrame("Button", nil, r); r.achi:SetSize(20, 20); r.achi:SetPoint("LEFT", r.env, "RIGHT", 4, 0)
             r.achi:SetNormalTexture("Interface\\AchievementFrame\\UI-Achievement-TinyShield")
             
-            -- V16: Skull Button
             r.skull = CreateFrame("Button", nil, r); r.skull:SetSize(18, 18); r.skull:SetPoint("LEFT", r.achi, "RIGHT", 4, 0)
             r.skull:SetNormalTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull")
 
@@ -326,10 +326,9 @@ function SLFM:RefreshQueueTable()
             end
         else
             r.achi:Hide()
-            r.skull:SetPoint("LEFT", r.env, "RIGHT", 4, 0) -- Posun doľava, ak achiev nesvieti
+            r.skull:SetPoint("LEFT", r.env, "RIGHT", 4, 0)
         end
 
-        -- V16: SKULL WARNING MATRIX
         local warnings = SLFM:GetWarnings(d.name, d.gs, d.role, d.isPvP)
         if #warnings > 0 then
             r.skull:Show()
@@ -376,9 +375,6 @@ function SLFM:RefreshQueueTable()
     end
 end
 
--- =====================================
--- 🛡️ V16 RAID OVERVIEW (Main Spec, Manual OS, Skull Matrix)
--- =====================================
 function SLFM:RefreshRaidTable()
     if not SausageLFM_Raid or not SausageLFM_Raid:IsShown() then return end
     if not self.rRows then self.rRows = {} end
@@ -423,12 +419,22 @@ function SLFM:RefreshRaidTable()
             end
 
             if head.env then head.env:Hide() end; if head.k then head.k:Hide() end; if head.gear then head.gear:Hide() end; if head.skull then head.skull:Hide() end
+            if head.wlBg then head.wlBg:Hide() end
             head:Show(); yOffset = yOffset - 16; rowIndex = rowIndex + 1
 
             for _, name in ipairs(categories[role]) do
                 if not self.rRows[rowIndex] then self.rRows[rowIndex] = CreateFrame("Button", nil, SausageLFM_Raid) end
                 local r = self.rRows[rowIndex]; r:SetSize(260, 16); r:SetPoint("TOPLEFT", 10, yOffset)
                 
+                -- FIX: Jemné grafické vyznačenie Whitelistu
+                if not r.wlBg then
+                    r.wlBg = r:CreateTexture(nil, "BACKGROUND")
+                    r.wlBg:SetAllPoints(r)
+                    r.wlBg:SetTexture(0, 1, 0, 0.15)
+                end
+                local isWl = SausageLFM_DB.whitelist and SausageLFM_DB.whitelist[name]
+                if isWl then r.wlBg:Show() else r.wlBg:Hide() end
+
                 if not r.env then r.env = CreateFrame("Button", nil, r); r.env:SetSize(14, 14); r.env:SetPoint("LEFT", 0, 0); r.env:SetNormalTexture("Interface\\Minimap\\Tracking\\Mailbox") end
                 r.env:Show(); r.env:SetScript("OnClick", function() ChatFrame_SendTell(name) end)
 
@@ -449,7 +455,6 @@ function SLFM:RefreshRaidTable()
                 local gs = SLFM:GetExternalGS(name)
                 local pData = SLFM.RaidData[name] or {}
                 
-                -- V16: SKULL WARNING MATRIX pre Raid Overview
                 local warnings = SLFM:GetWarnings(name, gs, role, false)
                 if #warnings > 0 then
                     r.skull:Show()
@@ -464,7 +469,6 @@ function SLFM:RefreshRaidTable()
                     r.skull:Hide()
                 end
 
-                -- V16: MAIN SPEC / MANUAL OS DISPLAY
                 local specString = ""
                 if pData.talents and pData.talents ~= "" then
                     specString = pData.talents
