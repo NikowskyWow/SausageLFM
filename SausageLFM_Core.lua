@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "1.16.0"
+SLFM.Version = "1.16.1"
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -71,6 +71,7 @@ local function HasBaseResilience(itemLink)
     return false
 end
 
+-- V16 GEARSCORELITE HOOKER
 function SLFM:GetExternalGS(name)
     local gs = 0
     if type(GearScore_GetScore) == "function" then
@@ -86,7 +87,7 @@ function SLFM:GetExternalGS(name)
     return 0
 end
 
--- V16 WARNING MATRIX (Spája všetky hrozby do jedného objektu)
+-- V16 WARNING MATRIX
 function SLFM:GetWarnings(name, gs, role, msgIsPvP)
     local warnings = {}
     if SausageLFM_DB.whitelist and SausageLFM_DB.whitelist[name] then return warnings end -- Whitelist Ignorácia
@@ -99,19 +100,18 @@ function SLFM:GetWarnings(name, gs, role, msgIsPvP)
     local pData = SLFM.RaidData[name] or {}
 
     -- 2. PvP Gear Detekcia
-    if pData.pvpItems and pData.pvpItems > 1 then -- Tolerancia 1 PvP item
+    if pData.pvpItems and pData.pvpItems > 1 then
         table.insert(warnings, "PvP Gear detected! (" .. pData.pvpItems .. " pure PvP items equipped)")
     elseif msgIsPvP then
         table.insert(warnings, "Player mentioned PvP in whisper")
     end
 
-    -- 3. Role Mismatch (Zlý gear/spec na rolu)
+    -- 3. Role Mismatch
     if role and role ~= "Uncategorized" and pData.activeSpec then
         local expectedRole = SpecToRole[pData.activeSpec]
-        -- Výnimka: Death Knighti môžu tankovať vo všetkých stromoch, Feral/Resto/Boomkin závisí od bodov, ale základná kontrola:
         if expectedRole and expectedRole ~= role then
             if expectedRole == "mDPS" and role == "Tank" then
-                -- Ignorujeme mDPS specy na Tanka pre DK a Warra (často hybridy)
+                -- Ignorujeme
             else
                 table.insert(warnings, "Wrong Gear/Spec! Assigned: " .. role .. ", Active Spec: " .. pData.activeSpec)
             end
@@ -245,7 +245,6 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
             if name then
                 SLFM.RaidData[name] = SLFM.RaidData[name] or {}
                 
-                -- V16: Presný Main Spec vs Off Spec
                 local numGroups = GetNumTalentGroups(true) or 1
                 local activeGroup = GetActiveTalentGroup(true) or 1
                 local activeSpec = GetSpecName(SLFM.CurrentInspectUnit, activeGroup)
@@ -264,7 +263,6 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
                     SLFM.RaidData[name].talents = activeSpec
                 end
 
-                -- V16: Base PvP Item Scanner
                 local pvpCount = 0
                 for i = 1, 19 do
                     local link = GetInventoryItemLink(SLFM.CurrentInspectUnit, i)
@@ -282,7 +280,6 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         local msg, sender, _, _, _, _, _, _, _, _, _, guid = ...
         local lmsg = msg:lower()
         
-        -- V16: Fixnutý GS Regex
         local gsMatch = lmsg:match("(%d[%.%,]%d?)%s*k") or lmsg:match("(%d[%.%,]%d?)%s*gs") or lmsg:match("(%d%s)k") or lmsg:match("(%d%s)gs") or lmsg:match("(%d%d%d%d)")
         local gs = 0
         if gsMatch then 
@@ -296,7 +293,6 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         if lmsg:find("mdps") or lmsg:find("melee") or lmsg:find("ret") or lmsg:find("feral") or lmsg:find("rogue") or lmsg:find("enh") or lmsg:find("warr") or lmsg:find("dk") then detectedRole = "mDPS" end
         if lmsg:find("rdps") or lmsg:find("ranged") or lmsg:find("shadow") or lmsg:find("boom") or lmsg:find("mage") or lmsg:find("lock") or lmsg:find("hunt") or lmsg:find("ele") then detectedRole = "rDPS" end
         
-        -- V16: Fixnutý OS Inteligencia Scanner
         local specKeywords = {"prot", "ret", "holy", "resto", "feral", "boom", "shadow", "disc", "blood", "frost", "unholy", "ele", "enh", "tree", "bear", "assa", "combat", "sub", "arcane", "fire", "destro", "demo", "affli", "bm", "mm", "surv", "arms", "fury"}
         local foundSpecs = {}
         for _, s in ipairs(specKeywords) do
@@ -308,7 +304,6 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         local detectedSpecStr = ""
         local detectedOSStr = ""
         if #foundSpecs > 0 then detectedSpecStr = foundSpecs[1].name end
-        -- OS je proste druhý spomenutý spec (nemusí tam byť napísané OS)
         if #foundSpecs > 1 then detectedOSStr = foundSpecs[2].name end
 
         local hasAchi = false
@@ -339,4 +334,16 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         end
         if self.RefreshQueueTable then self:RefreshQueueTable() end
     end
+end)
+
+-- ==========================================
+-- 🛡️ MINIMAP ICON
+-- ==========================================
+local btn = CreateFrame("Button", "SausageLFM_Minimap", Minimap)
+btn:SetSize(32, 32)
+btn:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 0, -50)
+btn:SetNormalTexture("Interface\\Icons\\Inv_Misc_Food_54")
+btn:SetScript("OnClick", function()
+    if not SausageLFM_Main then SLFM:InitializeUI() end
+    if SausageLFM_Main:IsShown() then SausageLFM_Main:Hide() else SausageLFM_Main:Show() end
 end)
