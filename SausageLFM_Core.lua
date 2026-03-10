@@ -3,7 +3,7 @@ local addonName, L = ...
 SausageLFM = CreateFrame("Frame", "SausageLFM_CoreFrame", UIParent)
 local SLFM = SausageLFM
 
-SLFM.Version = "1.16.5"
+SLFM.Version = "1.17.1"
 SLFM.Queue = {}
 SLFM.RaidData = {}
 SLFM.History = {}
@@ -18,11 +18,13 @@ local defaults = {
     isHC = false, reqAchiev = false,
     roles = { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 },
     specs = {},
-    channels = { General = false, World = false, LFG = false, Party = true },
+    channels = { Party = true },
     whitelist = {},
     Queue = {},
     RaidData = {},
-    customMsg = ""
+    customMsg = "",
+    hrMsg = "",
+    srLink = ""
 }
 
 local SpecToRole = {
@@ -73,18 +75,27 @@ local function HasBaseResilience(itemLink)
 end
 
 function SLFM:GetExternalGS(name)
-    local gs = 0
+    local rawGS = 0
     if type(GearScore_GetScore) == "function" then
         local targetUnit = (name == UnitName("player")) and "player" or name
-        local rawGS = GearScore_GetScore(name, targetUnit)
-        if rawGS and type(rawGS) == "number" and rawGS > 0 then return rawGS end
+        if UnitExists(targetUnit) then
+            local tempGS = GearScore_GetScore(name, targetUnit)
+            if tempGS and type(tempGS) == "number" and tempGS > 0 then rawGS = tempGS end
+        end
     end
-    local realm = GetRealmName()
-    if GS_Data and GS_Data[realm] and GS_Data[realm].Players and GS_Data[realm].Players[name] then
-        gs = tonumber(GS_Data[realm].Players[name].GearScore) or 0
-        if gs > 0 then return gs end
+    
+    if rawGS == 0 then
+        local realm = GetRealmName()
+        if GS_Data and GS_Data[realm] and GS_Data[realm].Players and GS_Data[realm].Players[name] then
+            local tempGS = tonumber(GS_Data[realm].Players[name].GearScore) or 0
+            if tempGS > 0 then rawGS = tempGS end
+        end
     end
-    return 0
+    
+    SLFM.RaidData[name] = SLFM.RaidData[name] or {}
+    if rawGS > 0 then SLFM.RaidData[name].gs = rawGS end
+    
+    return SLFM.RaidData[name].gs or 0
 end
 
 function SLFM:GetWarnings(name, gs, role, msgIsPvP)
@@ -103,12 +114,13 @@ function SLFM:GetWarnings(name, gs, role, msgIsPvP)
         table.insert(warnings, "Player mentioned PvP in whisper")
     end
 
-    if role and role ~= "Uncategorized" and pData.activeSpec then
-        local expectedRole = SpecToRole[pData.activeSpec]
+    local mSpec = pData.manualMS or pData.activeSpec
+    if role and role ~= "Uncategorized" and mSpec then
+        local expectedRole = SpecToRole[mSpec]
         if expectedRole and expectedRole ~= role then
             if expectedRole == "mDPS" and role == "Tank" then
             else
-                table.insert(warnings, "Wrong Gear/Spec! Assigned: " .. role .. ", Active Spec: " .. pData.activeSpec)
+                table.insert(warnings, "Wrong Gear/Spec! Assigned: " .. role .. ", Active Spec: " .. mSpec)
             end
         end
     end
@@ -121,9 +133,20 @@ function SLFM:UpdateMessage()
     local count = GetNumRaidMembers() > 0 and GetNumRaidMembers() or (GetNumPartyMembers() > 0 and GetNumPartyMembers() + 1 or 1)
     if db.instance ~= "Dungeon" and db.mode ~= "10" and db.mode ~= "25" then db.mode = "25" end
 
+    -- FIX: Zistujeme len ludi, ktori su aktualne fyzicky v grupe
+    local inGroup = {}
+    if GetNumRaidMembers() > 0 then
+        for i=1, GetNumRaidMembers() do local n = GetRaidRosterInfo(i); if n then inGroup[n] = true end end
+    else
+        inGroup[UnitName("player")] = true
+        for i=1, GetNumPartyMembers() do local n = UnitName("party"..i); if n then inGroup[n] = true end end
+    end
+
     local current = { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 }
     for name, data in pairs(SLFM.RaidData) do
-        if data.role and current[data.role] then current[data.role] = current[data.role] + 1 end
+        if inGroup[name] and data.role and current[data.role] then 
+            current[data.role] = current[data.role] + 1 
+        end
     end
 
     local missingGeneric = {
@@ -138,7 +161,11 @@ function SLFM:UpdateMessage()
         if target > 0 then
             finalSpecific[spec] = target
             local cleanSpec = spec:match("^(.-) %(") or spec
-            local parentRole = SpecToRole[cleanSpec]
+            
+            -- FIX: Korektne parsovanie parent role (napr. z "Prot Warrior" na "Tank")
+            local firstWord = cleanSpec:match("^(%S+)")
+            local parentRole = SpecToRole[cleanSpec] or SpecToRole[firstWord]
+            
             if not parentRole then
                 if cleanSpec == "Tank" then parentRole = "Tank" elseif cleanSpec == "Healer" then parentRole = "Heal" elseif cleanSpec == "Melee DPS" then parentRole = "mDPS" elseif cleanSpec == "Ranged DPS" then parentRole = "rDPS" end
             end
@@ -163,12 +190,8 @@ function SLFM:UpdateMessage()
     
     local baseMsg = msg .. " - Need: " .. (needs ~= "" and needs:gsub(", $", "") or "PUMPERS") .. " - w me spec/gs!"
     
-    -- Pripojenie vlastnej správy na koniec
-    if db.customMsg and db.customMsg ~= "" then
-        SLFM.CurrentMsg = baseMsg .. " - " .. db.customMsg
-    else
-        SLFM.CurrentMsg = baseMsg
-    end
+    if db.hrMsg and db.hrMsg ~= "" then baseMsg = baseMsg .. " - HR: " .. db.hrMsg end
+    if db.customMsg and db.customMsg ~= "" then SLFM.CurrentMsg = baseMsg .. " - " .. db.customMsg else SLFM.CurrentMsg = baseMsg end
 
     if SausageLFM_Main and SausageLFM_Main.preview then SausageLFM_Main.preview:SetText(SLFM.CurrentMsg) end
 end
@@ -228,14 +251,14 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         SausageLFM_DB = SausageLFM_DB or defaults
         SausageLFM_DB.roles = SausageLFM_DB.roles or { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 }
         SausageLFM_DB.specs = SausageLFM_DB.specs or {}
-        SausageLFM_DB.channels = SausageLFM_DB.channels or { General = false, World = false, LFG = false, Party = true }
+        SausageLFM_DB.channels = SausageLFM_DB.channels or { Party = true }
         SausageLFM_DB.interval = SausageLFM_DB.interval or 45
         SausageLFM_DB.whitelist = SausageLFM_DB.whitelist or {}
         SausageLFM_DB.Queue = SausageLFM_DB.Queue or {}
         SausageLFM_DB.RaidData = SausageLFM_DB.RaidData or {}
         SausageLFM_DB.customMsg = SausageLFM_DB.customMsg or ""
-        
-        if SausageLFM_DB.channels.Global ~= nil then SausageLFM_DB.channels.Global = nil end
+        SausageLFM_DB.hrMsg = SausageLFM_DB.hrMsg or ""
+        SausageLFM_DB.srLink = SausageLFM_DB.srLink or ""
         
         SLFM.Queue = SausageLFM_DB.Queue
         SLFM.RaidData = SausageLFM_DB.RaidData
@@ -259,14 +282,15 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
                 if not SLFM.RaidData[qName].role or SLFM.RaidData[qName].role == "Uncategorized" then 
                     SLFM.RaidData[qName].role = SLFM.Queue[i].role or "Uncategorized" 
                 end
-                
-                if not SLFM.RaidData[qName].talents and SLFM.Queue[i].spec and SLFM.Queue[i].spec ~= "" then
-                    SLFM.RaidData[qName].talents = SLFM.Queue[i].spec
+                if not SLFM.RaidData[qName].activeSpec and SLFM.Queue[i].spec and SLFM.Queue[i].spec ~= "" then
+                    SLFM.RaidData[qName].activeSpec = SLFM.Queue[i].spec
                 end
-                if not SLFM.RaidData[qName].manualOS and SLFM.Queue[i].os and SLFM.Queue[i].os ~= "" then
-                    SLFM.RaidData[qName].manualOS = SLFM.Queue[i].os
+                if not SLFM.RaidData[qName].offSpec and SLFM.Queue[i].os and SLFM.Queue[i].os ~= "" then
+                    SLFM.RaidData[qName].offSpec = SLFM.Queue[i].os
                 end
-
+                if (not SLFM.RaidData[qName].gs or SLFM.RaidData[qName].gs == 0) and SLFM.Queue[i].gs and SLFM.Queue[i].gs > 0 then
+                    SLFM.RaidData[qName].gs = SLFM.Queue[i].gs
+                end
                 table.remove(SLFM.Queue, i)
             end
         end
@@ -280,6 +304,11 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
             if name then
                 SLFM.RaidData[name] = SLFM.RaidData[name] or {}
                 
+                if type(GearScore_GetScore) == "function" then
+                    local tempGS = GearScore_GetScore(name, SLFM.CurrentInspectUnit)
+                    if tempGS and type(tempGS) == "number" and tempGS > 0 then SLFM.RaidData[name].gs = tempGS end
+                end
+
                 local numGroups = GetNumTalentGroups(true) or 1
                 local activeGroup = GetActiveTalentGroup(true) or 1
                 local activeSpec = GetSpecName(SLFM.CurrentInspectUnit, activeGroup)
@@ -290,20 +319,18 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
                     local offGroup = (activeGroup == 1) and 2 or 1
                     local offSpec = GetSpecName(SLFM.CurrentInspectUnit, offGroup)
                     if offSpec ~= "" and offSpec ~= activeSpec then
-                        SLFM.RaidData[name].talents = activeSpec .. "/" .. offSpec
+                        SLFM.RaidData[name].offSpec = offSpec
                     else
-                        SLFM.RaidData[name].talents = activeSpec
+                        SLFM.RaidData[name].offSpec = nil
                     end
                 else
-                    SLFM.RaidData[name].talents = activeSpec
+                    SLFM.RaidData[name].offSpec = nil
                 end
 
                 local pvpCount = 0
                 for i = 1, 19 do
                     local link = GetInventoryItemLink(SLFM.CurrentInspectUnit, i)
-                    if link and HasBaseResilience(link) then
-                        pvpCount = pvpCount + 1
-                    end
+                    if link and HasBaseResilience(link) then pvpCount = pvpCount + 1 end
                 end
                 SLFM.RaidData[name].pvpItems = pvpCount
             end
@@ -315,6 +342,10 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         local msg, sender, _, _, _, _, _, _, _, _, _, guid = ...
         local lmsg = msg:lower()
         
+        if not (lmsg:find("inv") or lmsg:find("gs") or lmsg:find("k") or lmsg:find("spec") or lmsg:find("tank") or lmsg:find("heal") or lmsg:find("dps") or lmsg:find("lfg") or lmsg:find("lf ") or lmsg:find("achi") or msg:find("|hitem:") or msg:find("|hachievement:")) then
+            return 
+        end
+
         local gsMatch = lmsg:match("(%d[%.%,]%d?)%s*k") or lmsg:match("(%d[%.%,]%d?)%s*gs") or lmsg:match("(%d%s)k") or lmsg:match("(%d%s)gs") or lmsg:match("(%d%d%d%d)")
         local gs = 0
         if gsMatch then 
@@ -322,11 +353,12 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
             if gs and gs < 100 then gs = gs * 1000 end
         end
 
+        -- FIX: Prioritizácia rolí aby "warr" neprepísal "prot"
         local detectedRole = "Uncategorized"
-        if lmsg:find("tank") or lmsg:find("prot") or lmsg:find("blood") or lmsg:find("bear") then detectedRole = "Tank" end
-        if lmsg:find("heal") or lmsg:find("resto") or lmsg:find("holy") or lmsg:find("disc") or lmsg:find("tree") then detectedRole = "Heal" end
-        if lmsg:find("mdps") or lmsg:find("melee") or lmsg:find("ret") or lmsg:find("feral") or lmsg:find("rogue") or lmsg:find("enh") or lmsg:find("warr") or lmsg:find("dk") then detectedRole = "mDPS" end
-        if lmsg:find("rdps") or lmsg:find("ranged") or lmsg:find("shadow") or lmsg:find("boom") or lmsg:find("mage") or lmsg:find("lock") or lmsg:find("hunt") or lmsg:find("ele") then detectedRole = "rDPS" end
+        if lmsg:find("tank") or lmsg:find("prot") or lmsg:find("blood") or lmsg:find("bear") then detectedRole = "Tank" 
+        elseif lmsg:find("heal") or lmsg:find("resto") or lmsg:find("holy") or lmsg:find("disc") or lmsg:find("tree") then detectedRole = "Heal" 
+        elseif lmsg:find("mdps") or lmsg:find("melee") or lmsg:find("ret") or lmsg:find("feral") or lmsg:find("rogue") or lmsg:find("enh") or lmsg:find("warr") or lmsg:find("dk") then detectedRole = "mDPS" 
+        elseif lmsg:find("rdps") or lmsg:find("ranged") or lmsg:find("shadow") or lmsg:find("boom") or lmsg:find("mage") or lmsg:find("lock") or lmsg:find("hunt") or lmsg:find("ele") then detectedRole = "rDPS" end
         
         local specKeywords = {"prot", "ret", "holy", "resto", "feral", "boom", "shadow", "disc", "blood", "frost", "unholy", "ele", "enh", "tree", "bear", "assa", "combat", "sub", "arcane", "fire", "destro", "demo", "affli", "bm", "mm", "surv", "arms", "fury"}
         local foundSpecs = {}
