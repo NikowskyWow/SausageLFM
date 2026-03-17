@@ -1,0 +1,12 @@
+# Agent rules and documentation
+.cursorrules
+.agents/
+.agent/
+_agents/
+_agent/
+.gemini/
+.antigravity/
+.knowledge/
+
+# Technical documentation for the agent
+docs/

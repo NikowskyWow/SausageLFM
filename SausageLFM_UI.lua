@@ -309,12 +309,12 @@ function SLFM:InitializeUI()
     local t2 = bcBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); t2:SetPoint("LEFT", timer, "RIGHT", 5, 0); t2:SetText("sec")
 
     local cX = 10
-    -- V16.5: General namiesto Global
-    for _, ch in ipairs({"General", "World", "LFG", "Party"}) do
+    -- Aktualizované kanály: General a Global
+    for _, ch in ipairs({"General", "Global"}) do
         local cb = CreateFrame("CheckButton", nil, bcBox, "UICheckButtonTemplate"); cb:SetPoint("TOPLEFT", cX, -60); cb:SetChecked(SausageLFM_DB.channels[ch])
         cb:SetScript("OnClick", function(self) SausageLFM_DB.channels[ch] = self:GetChecked() end)
         local cbt = bcBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); cbt:SetPoint("LEFT", cb, "RIGHT", 2, 0); cbt:SetText(ch)
-        cX = cX + 90
+        cX = cX + 110 -- Mierne zväčšený rozostup pre dlhšie názvy
     end
 
     -- V16.5: Custom Message Input

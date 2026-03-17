@@ -18,7 +18,7 @@ local defaults = {
     isHC = false, reqAchiev = false,
     roles = { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 },
     specs = {},
-    channels = { Party = true },
+    channels = { General = true, Global = true },
     whitelist = {},
     Queue = {},
     RaidData = {},
@@ -214,14 +214,13 @@ SLFM:SetScript("OnUpdate", function(self, elapsed)
             self:UpdateMessage()
             for chan, active in pairs(SausageLFM_DB.channels) do
                 if active then
-                    if chan == "Party" then
-                        if GetNumRaidMembers() > 0 then SendChatMessage(SLFM.CurrentMsg, "RAID")
-                        elseif GetNumPartyMembers() > 0 then SendChatMessage(SLFM.CurrentMsg, "PARTY") end
-                    elseif chan == "General" then
-                        SendChatMessage(SLFM.CurrentMsg, "CHANNEL", nil, 1)
+                    if chan == "General" then
+                        SendChatMessage(SLFM.CurrentMsg, "CHANNEL", nil, 1) -- General je vždy ID 1
                     else
                         local id = GetChannelName(chan)
-                        if id > 0 then SendChatMessage(SLFM.CurrentMsg, "CHANNEL", nil, id) end
+                        if id and id > 0 then 
+                            SendChatMessage(SLFM.CurrentMsg, "CHANNEL", nil, id) 
+                        end
                     end
                 end
             end
@@ -251,7 +250,7 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
         SausageLFM_DB = SausageLFM_DB or defaults
         SausageLFM_DB.roles = SausageLFM_DB.roles or { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 }
         SausageLFM_DB.specs = SausageLFM_DB.specs or {}
-        SausageLFM_DB.channels = SausageLFM_DB.channels or { Party = true }
+        SausageLFM_DB.channels = SausageLFM_DB.channels or { General = true, Global = true }
         SausageLFM_DB.interval = SausageLFM_DB.interval or 45
         SausageLFM_DB.whitelist = SausageLFM_DB.whitelist or {}
         SausageLFM_DB.Queue = SausageLFM_DB.Queue or {}
