@@ -24,7 +24,8 @@ local defaults = {
     RaidData = {},
     customMsg = "",
     hrMsg = "",
-    srLink = ""
+    srLink = "",
+    minimapPos = 220
 }
 
 local SpecToRole = {
@@ -247,20 +248,22 @@ SLFM:RegisterEvent("INSPECT_TALENT_READY")
 
 SLFM:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" and select(1, ...) == addonName then
-        SausageLFM_DB = SausageLFM_DB or defaults
+        -- Bezpečná inicializácia DB - nekopírujeme referenciu defaults tabuľky
+        SausageLFM_DB = SausageLFM_DB or {}
+        for k, v in pairs(defaults) do
+            if SausageLFM_DB[k] == nil then SausageLFM_DB[k] = v end
+        end
+        -- Zaistenie vnorených tabuliek
         SausageLFM_DB.roles = SausageLFM_DB.roles or { Tank = 0, Heal = 0, mDPS = 0, rDPS = 0 }
         SausageLFM_DB.specs = SausageLFM_DB.specs or {}
         SausageLFM_DB.channels = SausageLFM_DB.channels or { General = true, Global = true }
-        SausageLFM_DB.interval = SausageLFM_DB.interval or 45
         SausageLFM_DB.whitelist = SausageLFM_DB.whitelist or {}
         SausageLFM_DB.Queue = SausageLFM_DB.Queue or {}
         SausageLFM_DB.RaidData = SausageLFM_DB.RaidData or {}
-        SausageLFM_DB.customMsg = SausageLFM_DB.customMsg or ""
-        SausageLFM_DB.hrMsg = SausageLFM_DB.hrMsg or ""
-        SausageLFM_DB.srLink = SausageLFM_DB.srLink or ""
         
         SLFM.Queue = SausageLFM_DB.Queue
         SLFM.RaidData = SausageLFM_DB.RaidData
+        SLFM.UpdateMinimapPos()
 
     elseif event == "RAID_ROSTER_UPDATE" or event == "PARTY_MEMBERS_CHANGED" then
         local inGroup = {}
@@ -302,7 +305,11 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
             local name = UnitName(SLFM.CurrentInspectUnit)
             if name then
                 SLFM.RaidData[name] = SLFM.RaidData[name] or {}
-                
+
+                -- Uloženie class pre správne zobrazenie farby v UI
+                local _, inspectedClass = UnitClass(SLFM.CurrentInspectUnit)
+                if inspectedClass then SLFM.RaidData[name].class = inspectedClass end
+
                 if type(GearScore_GetScore) == "function" then
                     local tempGS = GearScore_GetScore(name, SLFM.CurrentInspectUnit)
                     if tempGS and type(tempGS) == "number" and tempGS > 0 then SLFM.RaidData[name].gs = tempGS end
@@ -402,11 +409,104 @@ SLFM:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
-local btn = CreateFrame("Button", "SausageLFM_Minimap", Minimap)
-btn:SetSize(32, 32)
-btn:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 0, -50)
-btn:SetNormalTexture("Interface\\Icons\\Inv_Misc_Food_54")
-btn:SetScript("OnClick", function()
-    if not SausageLFM_Main then SLFM:InitializeUI() end
-    if SausageLFM_Main:IsShown() then SausageLFM_Main:Hide() else SausageLFM_Main:Show() end
+-- [[ UPDATE / GITHUB FRAME ]]
+local GitFrame = CreateFrame("Frame", "SausageLFMGitFrame", UIParent)
+GitFrame:SetSize(320, 130)
+GitFrame:SetPoint("CENTER")
+GitFrame:SetFrameStrata("DIALOG")
+GitFrame:SetBackdrop({
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    tile = true, tileSize = 32, edgeSize = 32,
+    insets = { left = 11, right = 12, top = 12, bottom = 11 }
+})
+tinsert(UISpecialFrames, "SausageLFMGitFrame")
+GitFrame:Hide()
+
+local gitHeader = GitFrame:CreateTexture(nil, "OVERLAY")
+gitHeader:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
+gitHeader:SetSize(250, 64); gitHeader:SetPoint("TOP", 0, 12)
+
+local gitTitle = GitFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+gitTitle:SetPoint("TOP", gitHeader, "TOP", 0, -14); gitTitle:SetText("UPDATE LINK")
+
+local gitClose = CreateFrame("Button", nil, GitFrame, "UIPanelCloseButton")
+gitClose:SetPoint("TOPRIGHT", -8, -8)
+
+local gitDesc = GitFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+gitDesc:SetPoint("TOP", 0, -35); gitDesc:SetText("Press Ctrl+C to copy the GitHub link:")
+
+local gitEditBox = CreateFrame("EditBox", nil, GitFrame, "InputBoxTemplate")
+gitEditBox:SetSize(260, 20); gitEditBox:SetPoint("TOP", gitDesc, "BOTTOM", 0, -15)
+gitEditBox:SetAutoFocus(true)
+
+local GITHUB_LINK = "https://github.com/NikowskyWow/SausageLFM/releases"
+
+gitEditBox:SetScript("OnTextChanged", function(self)
+    if self:GetText() ~= GITHUB_LINK then
+        self:SetText(GITHUB_LINK); self:HighlightText()
+    end
 end)
+gitEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus(); GitFrame:Hide() end)
+GitFrame:SetScript("OnShow", function()
+    gitEditBox:SetText(GITHUB_LINK); gitEditBox:SetFocus(); gitEditBox:HighlightText()
+end)
+
+SLFM.GitFrame = GitFrame
+
+-- [[ MINIMAPA ]]
+local mmBtn = CreateFrame("Button", "SausageLFM_Minimap", Minimap)
+mmBtn:SetSize(31, 31); mmBtn:SetFrameStrata("MEDIUM"); mmBtn:SetFrameLevel(8)
+
+local mmIcon = mmBtn:CreateTexture(nil, "BACKGROUND")
+mmIcon:SetTexture("Interface\\Icons\\Inv_Misc_Food_54"); mmIcon:SetSize(20, 20); mmIcon:SetPoint("CENTER")
+
+local mmBorder = mmBtn:CreateTexture(nil, "OVERLAY")
+mmBorder:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder"); mmBorder:SetSize(52, 52); mmBorder:SetPoint("TOPLEFT")
+mmBorder:SetVertexColor(1, 0.6, 0)
+
+mmBtn:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+mmBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+mmBtn:RegisterForDrag("RightButton"); mmBtn:SetMovable(true)
+
+local function UpdateMinimapPos()
+    local angle = math.rad(SausageLFM_DB and SausageLFM_DB.minimapPos or 220)
+    mmBtn:SetPoint("CENTER", Minimap, "CENTER", math.cos(angle) * 80, math.sin(angle) * 80)
+end
+
+mmBtn:SetScript("OnClick", function(self, button)
+    if button == "LeftButton" then
+        if not SausageLFM_Main then SLFM:InitializeUI() end
+        if SausageLFM_Main:IsShown() then SausageLFM_Main:Hide() else SausageLFM_Main:Show() end
+    end
+end)
+
+mmBtn:SetScript("OnDragStart", function(self)
+    self:LockHighlight()
+    self:SetScript("OnUpdate", function()
+        local xpos, ypos = GetCursorPosition()
+        local xmin, ymin = Minimap:GetLeft(), Minimap:GetBottom()
+        local scale = Minimap:GetEffectiveScale()
+        xpos = (xpos / scale) - xmin - 70; ypos = (ypos / scale) - ymin - 70
+        local angle = math.deg(math.atan2(ypos, xpos))
+        if angle < 0 then angle = angle + 360 end
+        if SausageLFM_DB then SausageLFM_DB.minimapPos = angle end
+        UpdateMinimapPos()
+    end)
+end)
+
+mmBtn:SetScript("OnDragStop", function(self)
+    self:UnlockHighlight(); self:SetScript("OnUpdate", nil)
+end)
+
+mmBtn:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:AddLine("|cffff8800Sausage|rLFM", 1, 1, 1)
+    GameTooltip:AddLine("Left Click: Toggle Window", 1, 0.8, 0)
+    GameTooltip:AddLine("Right Click + Drag: Move Icon", 1, 0.8, 0)
+    GameTooltip:Show()
+end)
+mmBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+-- Pozícia sa nastaví po načítaní DB (ADDON_LOADED)
+SLFM.UpdateMinimapPos = UpdateMinimapPos

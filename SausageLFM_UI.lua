@@ -76,7 +76,7 @@ function SLFM:InitializeUI()
     
     local updateBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     updateBtn:SetSize(110, 22); updateBtn:SetPoint("RIGHT", closeBtn, "LEFT", -10, 0); updateBtn:SetText("Check Updates")
-    updateBtn:SetScript("OnClick", function() print("|cff00ccff[SausageLFM]|r You are running the latest V1.16.5!") end)
+    updateBtn:SetScript("OnClick", function() if SLFM.GitFrame then SLFM.GitFrame:Show() end end)
 
     local left = CreateFrame("Frame", "SausageLFM_Raid", f); left:SetSize(280, 570); left:SetPoint("TOPLEFT", 20, -60); CreateBackdrop(left, "blue")
     
@@ -503,7 +503,8 @@ function SLFM:RefreshRaidTable()
                 if not r.t then r.t = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall") end
                 r.t:SetPoint("LEFT", r.env, "RIGHT", 5, 0)
                 
-                local _, class = UnitClass(name)
+                -- UnitClass vyžaduje unit token, nie meno - použijeme uloženú class z inspect dát
+                local class = pData.class
                 local colorCode = ClassColors[class] or "FFFFFF"
                 local gs = SLFM:GetExternalGS(name)
                 local pData = SLFM.RaidData[name] or {}
@@ -522,12 +523,14 @@ function SLFM:RefreshRaidTable()
                     r.skull:Hide()
                 end
 
+                -- Zostavenie spec stringu z inspect dát (activeSpec + offSpec)
                 local specString = ""
-                if pData.talents and pData.talents ~= "" then
-                    specString = pData.talents
+                if pData.activeSpec and pData.activeSpec ~= "" then
+                    specString = pData.activeSpec
                 end
-                if pData.manualOS then
-                    if specString ~= "" then specString = specString .. "|OS:" .. pData.manualOS else specString = pData.manualOS end
+                local os = pData.manualOS or pData.offSpec
+                if os and os ~= "" and os ~= specString then
+                    if specString ~= "" then specString = specString .. "|OS:" .. os else specString = os end
                 end
                 
                 local talentInfo = (specString ~= "") and (" |cff00ccff[" .. specString .. "]|r") or ""

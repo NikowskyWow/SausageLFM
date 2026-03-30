@@ -2,7 +2,7 @@
 ## Title: |cffffd200Sausage|rLFM
 ## Notes: The Ultimate Raid Leader Command Center.
 ## Author: Sausage Party / Kokotiar
-## Version: @project-version@
+## Version: SAUSAGE_VERSION
 ## SavedVariables: SausageLFM_DB
 
 SausageLFM_Core.lua
