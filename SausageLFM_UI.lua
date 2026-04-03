@@ -185,8 +185,22 @@ function SLFM:InitializeUI()
     hc:SetScript("OnClick", function(self) SausageLFM_DB.isHC = self:GetChecked(); SLFM:UpdateMessage() end)
     local hcText = mid:CreateFontString("SLFM_HC_TEXT", "OVERLAY", "GameFontHighlightSmall"); hcText:SetPoint("LEFT", hc, "RIGHT", 2, 0); hcText:SetText("HC")
 
+    -- Checkbox pre BOE Hard Reserve
+    local boe = CreateFrame("CheckButton", nil, mid, "UICheckButtonTemplate"); boe:SetPoint("LEFT", hc, "RIGHT", 45, 0); boe:SetChecked(SausageLFM_DB.boeHR)
+    boe:SetScript("OnClick", function(self) SausageLFM_DB.boeHR = self:GetChecked(); SLFM:UpdateMessage() end)
+    local boeTxt = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); boeTxt:SetPoint("LEFT", boe, "RIGHT", 2, 0); boeTxt:SetText("BOE HR")
+
+    -- Upvalue referencie pre sapphKey dropdown, priradené neskôr
+    local sapphKeyDrop, sapphKeyLbl
+
     local function UpdateHCVisibility()
         if SausageLFM_DB.instance == "Dungeon" then hc:Show(); hcText:Show() else hc:Hide(); hcText:Hide(); SausageLFM_DB.isHC = false end
+        -- Zobrazenie Sapphiron Key dropdown iba pre Naxxramas 10/25
+        if sapphKeyDrop then
+            local showKey = SausageLFM_DB.instance == "Naxxramas" and (SausageLFM_DB.mode == "10" or SausageLFM_DB.mode == "25")
+            if showKey then sapphKeyDrop:Show(); sapphKeyLbl:Show()
+            else sapphKeyDrop:Hide(); sapphKeyLbl:Hide(); if SausageLFM_DB.sapphKey ~= "None" then SausageLFM_DB.sapphKey = "None"; SLFM:UpdateMessage() end end
+        end
     end
 
     local instDrop = CreateFrame("Frame", "SLFM_InstDrop", mid, "UIDropDownMenuTemplate"); instDrop:SetPoint("TOPLEFT", -15, -10)
@@ -208,7 +222,21 @@ function SLFM:InitializeUI()
         end
     end)
     UIDropDownMenu_SetText(instDrop, SausageLFM_DB.instance); UIDropDownMenu_SetWidth(instDrop, 140)
-    InitModeDropdown(); UIDropDownMenu_SetWidth(modeDrop, 130); UpdateHCVisibility()
+    InitModeDropdown(); UIDropDownMenu_SetWidth(modeDrop, 130)
+
+    -- Dropdown pre Sapphiron Key (viditeľný len pri Naxxramas 10/25)
+    sapphKeyLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    sapphKeyLbl:SetPoint("LEFT", modeDrop, "RIGHT", -5, 0); sapphKeyLbl:SetText("Key:")
+    sapphKeyDrop = CreateFrame("Frame", "SLFM_SapphKeyDrop", mid, "UIDropDownMenuTemplate")
+    sapphKeyDrop:SetPoint("LEFT", sapphKeyLbl, "RIGHT", -15, 0)
+    UIDropDownMenu_Initialize(sapphKeyDrop, function()
+        local info = UIDropDownMenu_CreateInfo()
+        for _, v in ipairs({"None", "HR", "G BID", "Open Roll"}) do
+            info.text = v; info.func = function() SausageLFM_DB.sapphKey = v; UIDropDownMenu_SetText(sapphKeyDrop, v); SLFM:UpdateMessage() end; UIDropDownMenu_AddButton(info)
+        end
+    end)
+    UIDropDownMenu_SetText(sapphKeyDrop, SausageLFM_DB.sapphKey or "None"); UIDropDownMenu_SetWidth(sapphKeyDrop, 90)
+    UpdateHCVisibility()
 
     local gsIn = CreateFlatEditBox(mid, 60, 20); gsIn:SetPoint("TOPRIGHT", -15, -45); gsIn:SetText(tostring(SausageLFM_DB.minGS))
     gsIn:SetScript("OnTextChanged", function(self) SausageLFM_DB.minGS = tonumber(self:GetText()) or 0; SLFM:UpdateMessage(); SLFM:RefreshQueueTable(); SLFM:RefreshRaidTable() end)
@@ -504,10 +532,10 @@ function SLFM:RefreshRaidTable()
                 r.t:SetPoint("LEFT", r.env, "RIGHT", 5, 0)
                 
                 -- UnitClass vyžaduje unit token, nie meno - použijeme uloženú class z inspect dát
+                local pData = SLFM.RaidData[name] or {}
                 local class = pData.class
                 local colorCode = ClassColors[class] or "FFFFFF"
                 local gs = SLFM:GetExternalGS(name)
-                local pData = SLFM.RaidData[name] or {}
                 
                 local warnings = SLFM:GetWarnings(name, gs, role, false)
                 if #warnings > 0 then

@@ -25,7 +25,9 @@ local defaults = {
     customMsg = "",
     hrMsg = "",
     srLink = "",
-    minimapPos = 220
+    minimapPos = 220,
+    boeHR = false,
+    sapphKey = "None"
 }
 
 local SpecToRole = {
@@ -192,6 +194,10 @@ function SLFM:UpdateMessage()
     local baseMsg = msg .. " - Need: " .. (needs ~= "" and needs:gsub(", $", "") or "PUMPERS") .. " - w me spec/gs!"
     
     if db.hrMsg and db.hrMsg ~= "" then baseMsg = baseMsg .. " - HR: " .. db.hrMsg end
+    if db.boeHR then baseMsg = baseMsg .. " - BOE: HR" end
+    if db.sapphKey and db.sapphKey ~= "None" and db.instance == "Naxxramas" and (db.mode == "10" or db.mode == "25") then
+        baseMsg = baseMsg .. " - Sapph Key: " .. db.sapphKey
+    end
     if db.customMsg and db.customMsg ~= "" then SLFM.CurrentMsg = baseMsg .. " - " .. db.customMsg else SLFM.CurrentMsg = baseMsg end
 
     if SausageLFM_Main and SausageLFM_Main.preview then SausageLFM_Main.preview:SetText(SLFM.CurrentMsg) end
