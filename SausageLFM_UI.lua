@@ -190,16 +190,23 @@ function SLFM:InitializeUI()
     boe:SetScript("OnClick", function(self) SausageLFM_DB.boeHR = self:GetChecked(); SLFM:UpdateMessage() end)
     local boeTxt = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); boeTxt:SetPoint("LEFT", boe, "RIGHT", 2, 0); boeTxt:SetText("BOE HR")
 
-    -- Upvalue referencie pre sapphKey dropdown, priradené neskôr
+    -- Upvalue referencie pre sapphKey dropdown a obsidian drakes dropdown, priradené neskôr
     local sapphKeyDrop, sapphKeyLbl
+    local obsidianDrakesDrop, obsidianDrakesLbl
 
-    local function UpdateHCVisibility()
+    local function UpdateInstanceOptions()
         if SausageLFM_DB.instance == "Dungeon" then hc:Show(); hcText:Show() else hc:Hide(); hcText:Hide(); SausageLFM_DB.isHC = false end
         -- Zobrazenie Sapphiron Key dropdown iba pre Naxxramas 10/25
         if sapphKeyDrop then
             local showKey = SausageLFM_DB.instance == "Naxxramas" and (SausageLFM_DB.mode == "10" or SausageLFM_DB.mode == "25")
             if showKey then sapphKeyDrop:Show(); sapphKeyLbl:Show()
             else sapphKeyDrop:Hide(); sapphKeyLbl:Hide(); if SausageLFM_DB.sapphKey ~= "None" then SausageLFM_DB.sapphKey = "None"; SLFM:UpdateMessage() end end
+        end
+        -- Zobrazenie Drakes dropdown iba pre The Obsidian Sanctum
+        if obsidianDrakesDrop then
+            local showDrakes = SausageLFM_DB.instance == "The Obsidian Sanctum"
+            if showDrakes then obsidianDrakesDrop:Show(); obsidianDrakesLbl:Show()
+            else obsidianDrakesDrop:Hide(); obsidianDrakesLbl:Hide(); if SausageLFM_DB.obsidianDrakes ~= 0 then SausageLFM_DB.obsidianDrakes = 0; SLFM:UpdateMessage() end end
         end
     end
 
@@ -218,7 +225,7 @@ function SLFM:InitializeUI()
     UIDropDownMenu_Initialize(instDrop, function()
         local info = UIDropDownMenu_CreateInfo()
         for _, v in ipairs({"Icecrown Citadel", "Ruby Sanctum", "Trial of the Crusader", "Ulduar", "Naxxramas", "The Obsidian Sanctum", "The Eye of Eternity", "Vault of Archavon", "Dungeon"}) do
-            info.text = v; info.func = function() SausageLFM_DB.instance = v; UIDropDownMenu_SetText(instDrop, v); InitModeDropdown(); UpdateHCVisibility(); SLFM:UpdateMessage() end; UIDropDownMenu_AddButton(info)
+            info.text = v; info.func = function() SausageLFM_DB.instance = v; UIDropDownMenu_SetText(instDrop, v); InitModeDropdown(); UpdateInstanceOptions(); SLFM:UpdateMessage() end; UIDropDownMenu_AddButton(info)
         end
     end)
     UIDropDownMenu_SetText(instDrop, SausageLFM_DB.instance); UIDropDownMenu_SetWidth(instDrop, 140)
@@ -236,7 +243,29 @@ function SLFM:InitializeUI()
         end
     end)
     UIDropDownMenu_SetText(sapphKeyDrop, SausageLFM_DB.sapphKey or "None"); UIDropDownMenu_SetWidth(sapphKeyDrop, 90)
-    UpdateHCVisibility()
+
+    -- Dropdown pre počet drakov v Obsidian Sanctum (zdieľa riadok so Sapphiron Key, sú vzájomne exkluzívne)
+    obsidianDrakesLbl = mid:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    obsidianDrakesLbl:SetPoint("LEFT", modeDrop, "RIGHT", -5, 0); obsidianDrakesLbl:SetText("Drakes:")
+    obsidianDrakesDrop = CreateFrame("Frame", "SLFM_ObsidianDrakesDrop", mid, "UIDropDownMenuTemplate")
+    obsidianDrakesDrop:SetPoint("LEFT", obsidianDrakesLbl, "RIGHT", -15, 0)
+    UIDropDownMenu_Initialize(obsidianDrakesDrop, function()
+        local info = UIDropDownMenu_CreateInfo()
+        for _, v in ipairs({0, 1, 2, 3}) do
+            local label = v == 0 and "0D (Zerg)" or tostring(v) .. "D"
+            info.text = label; info.func = function()
+                SausageLFM_DB.obsidianDrakes = v
+                UIDropDownMenu_SetText(obsidianDrakesDrop, label)
+                SLFM:UpdateMessage()
+            end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    local initDrakesVal = SausageLFM_DB.obsidianDrakes or 0
+    UIDropDownMenu_SetText(obsidianDrakesDrop, initDrakesVal == 0 and "0D (Zerg)" or tostring(initDrakesVal) .. "D")
+    UIDropDownMenu_SetWidth(obsidianDrakesDrop, 90)
+
+    UpdateInstanceOptions()
 
     local gsIn = CreateFlatEditBox(mid, 60, 20); gsIn:SetPoint("TOPRIGHT", -15, -45); gsIn:SetText(tostring(SausageLFM_DB.minGS))
     gsIn:SetScript("OnTextChanged", function(self) SausageLFM_DB.minGS = tonumber(self:GetText()) or 0; SLFM:UpdateMessage(); SLFM:RefreshQueueTable(); SLFM:RefreshRaidTable() end)

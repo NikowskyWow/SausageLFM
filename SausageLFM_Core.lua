@@ -27,7 +27,8 @@ local defaults = {
     srLink = "",
     minimapPos = 220,
     boeHR = false,
-    sapphKey = "None"
+    sapphKey = "None",
+    obsidianDrakes = 0
 }
 
 local SpecToRole = {
@@ -179,7 +180,12 @@ function SLFM:UpdateMessage()
     end
 
     local modeName = (db.instance == "Dungeon") and db.mode or (db.instance .. " " .. db.mode)
-    local msg = "LFM " .. modeName .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. ((db.instance == "Dungeon") and 5 or ((db.mode == "10") and 10 or 25)) .. ")"
+    -- Pridanie počtu drakov priamo za názov inštancie pre Obsidian Sanctum
+    local drakesSuffix = ""
+    if db.instance == "The Obsidian Sanctum" and db.obsidianDrakes then
+        drakesSuffix = " " .. db.obsidianDrakes .. "D"
+    end
+    local msg = "LFM " .. modeName .. drakesSuffix .. (db.isHC and " HC" or "") .. " (" .. count .. "/" .. ((db.instance == "Dungeon") and 5 or ((db.mode == "10") and 10 or 25)) .. ")"
     
     local needs = ""
     if missingGeneric.Tank > 0 then needs = needs .. missingGeneric.Tank .. "x Tank, " end
